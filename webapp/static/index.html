@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mortgage Insights Studio</title>
+    <title>Richard's Mortgage Calculator</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
     <link
       rel="stylesheet"
@@ -13,164 +13,256 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.3/dist/tailwind.min.css"
     />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body class="min-h-screen bg-slate-950 text-slate-100">
     <div class="absolute inset-0 overflow-hidden">
       <div class="gradient-blur"></div>
+      <div class="gradient-blur second"></div>
     </div>
     <div class="relative z-10">
-      <header class="px-6 pt-10 pb-6 max-w-6xl mx-auto">
-        <div class="flex flex-col gap-4">
-          <span class="badge">Mortgage Toolkit</span>
-          <h1 class="text-3xl md:text-4xl font-semibold tracking-tight">
-            Explore rich mortgage comparisons in seconds
-          </h1>
-          <p class="text-slate-300 max-w-3xl">
-            Configure loan scenarios, inspect amortization schedules, and visualize payoff
-            curves using a modern, Shadcn-inspired interface.
-          </p>
-        </div>
+      <header class="hero">
+        <div class="hero__badge">Richard's Mortgage Calculator</div>
       </header>
 
-      <main class="px-6 pb-16 max-w-6xl mx-auto flex flex-col gap-10">
-        <section class="card">
-          <form id="calculatorForm" class="flex flex-col gap-6">
-            <div class="grid md:grid-cols-3 gap-6">
-              <label class="form-field md:col-span-1">
-                <span class="form-label">Loan Amount</span>
+      <main class="shell">
+        <section class="card form-card">
+          <div class="form-head">
+            <div>
+              <p class="eyebrow">Deal inputs</p>
+              <h2>Enter the core deal inputs used for every scenario.</h2>
+            </div>
+            <button type="button" id="addScenario" class="btn ghost">Add scenario</button>
+          </div>
+          <form id="calculatorForm" class="form-grid">
+            <div class="grid-two">
+              <label class="form-field">
+                <span class="form-label">Loan amount</span>
                 <div class="form-input">
                   <span class="prefix">$</span>
                   <input
                     id="loanAmount"
                     type="number"
-                    min="1000"
+                    min="50000"
                     step="1000"
-                    placeholder="350000"
+                    placeholder="450000"
                     required
                   />
                 </div>
               </label>
-              <label class="form-field md:col-span-2">
-                <span class="form-label">Schedule Rows (max 1200)</span>
+              <label class="form-field">
+                <span class="form-label">Property value</span>
+                <div class="form-input">
+                  <span class="prefix">$</span>
+                  <input
+                    id="propertyValue"
+                    type="number"
+                    min="50000"
+                    step="1000"
+                    placeholder="525000"
+                  />
+                </div>
+              </label>
+            </div>
+
+            <div class="grid-three">
+              <label class="form-field">
+                <span class="form-label">Monthly rent / income</span>
+                <div class="form-input">
+                  <span class="prefix">$</span>
+                  <input id="monthlyRent" type="number" min="0" step="100" placeholder="4200" />
+                </div>
+              </label>
+              <label class="form-field">
+                <span class="form-label">Operating costs</span>
+                <div class="form-input">
+                  <span class="prefix">$</span>
+                  <input
+                    id="operatingCosts"
+                    type="number"
+                    min="0"
+                    step="50"
+                    placeholder="950"
+                  />
+                </div>
+              </label>
+              <label class="form-field">
+                <span class="form-label">Schedule rows (max 1200)</span>
                 <input
                   id="scheduleLimit"
                   class="text-input"
                   type="number"
                   min="1"
                   max="1200"
-                  value="360"
+                  placeholder="360"
                 />
               </label>
             </div>
 
-            <div class="flex flex-col gap-3">
-              <div class="flex items-center justify-between">
-                <span class="form-label">Scenarios</span>
-                <button type="button" id="addScenario" class="btn ghost">Add scenario</button>
+            <div class="scenario-panel">
+              <div class="scenario-head">
+                <div>
+                  <p class="eyebrow">Mortgage scenarios</p>
+                  <p class="subtle">Compare as many term + rate pairs as you need.</p>
+                </div>
               </div>
-              <div id="scenarios" class="flex flex-col gap-3"></div>
-              <p class="text-xs text-slate-400">
-                Add mortgage terms in years with their annual interest rate. Longer terms or
-                higher rates highlight total interest paid.
-              </p>
+              <div id="scenarios" class="scenario-grid"></div>
             </div>
 
-            <div class="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
-              <p class="text-sm text-slate-300">
-                Results include amortization tables and payoff insights for each scenario.
-              </p>
-              <button type="submit" class="btn primary">Generate insights</button>
+            <div class="cta-row">
+              <div>
+                <p class="subtle">Includes payoff curves, amortization tables, and ROI-grade ratios.</p>
+                <p id="formError" class="text-sm text-rose-300 hidden"></p>
+              </div>
+              <button type="submit" class="btn primary">Generate investor brief</button>
             </div>
-            <p id="formError" class="text-sm text-rose-300 hidden"></p>
           </form>
         </section>
 
-        <section id="results" class="flex flex-col gap-6 hidden">
+        <section id="results" class="stack hidden">
           <div class="grid gap-4 md:grid-cols-3" id="summaryCards"></div>
-          <div class="card">
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+
+          <section class="card accent">
+            <div class="insight-head">
               <div>
-                <h2 class="text-xl font-semibold">Scenario summary</h2>
-                <p class="text-sm text-slate-400">
-                  Compare monthly payments and total interest across scenarios.
-                </p>
+                <p class="eyebrow">Portfolio posture</p>
+                <h2>Cashflow vs equity outlook</h2>
               </div>
-              <div class="flex items-center gap-2">
-                <label class="text-sm text-slate-300" for="scenarioSelect">View details for</label>
-                <select id="scenarioSelect" class="select"></select>
+              <div id="ltvBadge" class="badge pill"></div>
+            </div>
+            <div class="insight-grid">
+              <div>
+                <p class="subtle">Property value</p>
+                <p id="propertyValueStat" class="stat"></p>
+              </div>
+              <div>
+                <p class="subtle">Monthly rent</p>
+                <p id="rentStat" class="stat"></p>
+              </div>
+              <div>
+                <p class="subtle">Operating costs</p>
+                <p id="costStat" class="stat"></p>
               </div>
             </div>
+            <p id="comparisonNarrative" class="narrative"></p>
+          </section>
+
+          <div class="card">
+            <div class="table-head">
+              <div>
+                <h2>Scenario ledger</h2>
+                <p class="subtle">Ranked by monthly payment, cashflow, and equity velocity.</p>
+              </div>
+              <div id="scenarioTabs" class="scenario-tabs"></div>
+            </div>
             <div class="overflow-x-auto">
-              <table class="min-w-full text-left text-sm">
-                <thead class="text-slate-300 uppercase tracking-wide text-xs">
+              <table class="data-table">
+                <thead>
                   <tr>
-                    <th class="px-4 py-3">Term (years)</th>
-                    <th class="px-4 py-3">Rate</th>
-                    <th class="px-4 py-3">Monthly Payment</th>
-                    <th class="px-4 py-3">Total Interest</th>
+                    <th>Term</th>
+                    <th>Rate</th>
+                    <th>Monthly payment</th>
+                    <th>Cashflow</th>
+                    <th>Year 1 equity</th>
+                    <th>5-year equity</th>
+                    <th>Total interest</th>
                   </tr>
                 </thead>
-                <tbody id="summaryTable" class="divide-y divide-slate-800"></tbody>
+                <tbody id="summaryTable"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h3>Horizon cashflow & equity</h3>
+              <p class="subtle">Net cash received, equity built, and combined value at 5, 10, and 15 years.</p>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="data-table horizon">
+                <thead>
+                  <tr>
+                    <th>Scenario</th>
+                    <th>5-year outlook</th>
+                    <th>10-year outlook</th>
+                    <th>15-year outlook</th>
+                  </tr>
+                </thead>
+                <tbody id="horizonTable"></tbody>
               </table>
             </div>
           </div>
 
           <div class="grid gap-6 lg:grid-cols-2">
             <div class="card">
-              <div class="flex flex-col gap-2">
-                <h3 class="text-lg font-semibold">Balance payoff trajectory</h3>
-                <p class="text-sm text-slate-400">
-                  Remaining balance vs. payment number for the selected scenario.
-                </p>
+              <div class="card-head">
+                <h3>Balance payoff trajectory</h3>
+                <p class="subtle">Remaining balance vs. payment number for the selected scenario.</p>
               </div>
-              <canvas id="balanceChart" height="320"></canvas>
+              <div class="chart-frame">
+                <canvas id="balanceChart"></canvas>
+              </div>
             </div>
             <div class="card">
-              <div class="flex flex-col gap-2">
-                <h3 class="text-lg font-semibold">Principal vs. interest composition</h3>
-                <p class="text-sm text-slate-400">
-                  How each payment splits between principal reduction and interest.
-                </p>
+              <div class="card-head">
+                <h3>Principal vs. interest composition</h3>
+                <p class="subtle">How each payment splits between principal reduction and interest.</p>
               </div>
-              <canvas id="compositionChart" height="320"></canvas>
+              <div class="chart-frame">
+                <canvas id="compositionChart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid gap-6 lg:grid-cols-2">
+            <div class="card">
+              <div class="card-head">
+                <h3>Cashflow power ranking</h3>
+                <p class="subtle">Net monthly cash after debt service and operating costs.</p>
+              </div>
+              <div class="chart-frame">
+                <canvas id="cashflowChart"></canvas>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <h3>Equity acceleration</h3>
+                <p class="subtle">Equity built in year 1, 5, and 10 for each structure.</p>
+              </div>
+              <div class="chart-frame">
+                <canvas id="equityChart"></canvas>
+              </div>
             </div>
           </div>
 
           <div class="card">
-            <div class="flex flex-col gap-2">
-              <h3 class="text-lg font-semibold">Amortization schedule</h3>
-              <p class="text-sm text-slate-400">
-                Detailed payment breakdown for the selected scenario. Scroll to explore.
-              </p>
+            <div class="card-head">
+              <h3>Amortization schedule</h3>
+              <p class="subtle">Detailed payment breakdown for the selected scenario.</p>
             </div>
             <div class="overflow-x-auto max-h-[480px]">
-              <table class="min-w-full text-left text-xs md:text-sm">
-                <thead class="text-slate-300 uppercase tracking-wide text-[0.65rem] md:text-xs">
+              <table class="data-table compact">
+                <thead>
                   <tr>
-                    <th class="px-4 py-3">#</th>
-                    <th class="px-4 py-3">Payment</th>
-                    <th class="px-4 py-3">Principal</th>
-                    <th class="px-4 py-3">Interest</th>
-                    <th class="px-4 py-3">Balance</th>
+                    <th>#</th>
+                    <th>Payment</th>
+                    <th>Principal</th>
+                    <th>Interest</th>
+                    <th>Balance</th>
                   </tr>
                 </thead>
-                <tbody id="scheduleTable" class="divide-y divide-slate-800"></tbody>
+                <tbody id="scheduleTable"></tbody>
               </table>
             </div>
           </div>
         </section>
 
-        <section id="emptyState" class="card empty">
-          <div class="flex flex-col gap-3 items-start">
-            <h2 class="text-xl font-semibold">Your mortgage insights will appear here</h2>
-            <p class="text-sm text-slate-400 max-w-2xl">
-              Configure your scenarios above to generate comparative analytics. You'll see
-              monthly payment and interest summaries, interactive charts, and a full
-              amortization table tailored to your selections.
-            </p>
-          </div>
-        </section>
       </main>
     </div>
     <script src="/static/main.js" type="module"></script>
