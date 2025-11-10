@@ -115,6 +115,37 @@
               <div id="scenarios" class="scenario-grid"></div>
             </div>
 
+            <div class="scenario-panel">
+              <div class="scenario-head">
+                <div>
+                  <p class="eyebrow">Sensitivity bands</p>
+                  <p class="subtle">Define +/- adjustments for term, rate, and points.</p>
+                </div>
+              </div>
+              <div class="grid-three">
+                <label class="form-field">
+                  <span class="form-label">Base points (%)</span>
+                  <input id="basePoints" class="text-input" type="number" min="0" step="0.125" value="0" />
+                </label>
+                <label class="form-field">
+                  <span class="form-label">Term +/- (years)</span>
+                  <input id="termBand" class="text-input" type="number" min="0" step="1" value="5" />
+                </label>
+                <label class="form-field">
+                  <span class="form-label">Rate +/- (%)</span>
+                  <input id="rateBand" class="text-input" type="number" min="0" step="0.1" value="0.5" />
+                </label>
+                <label class="form-field">
+                  <span class="form-label">Points +/- (%)</span>
+                  <input id="pointsBand" class="text-input" type="number" min="0" step="0.125" value="0.5" />
+                </label>
+                <label class="form-field">
+                  <span class="form-label">Horizon (years)</span>
+                  <input id="sensitivityHorizon" class="text-input" type="number" min="1" max="50" step="1" value="5" />
+                </label>
+              </div>
+            </div>
+
             <div class="cta-row">
               <div>
                 <p class="subtle">Includes payoff curves, amortization tables, and ROI-grade ratios.</p>
@@ -195,6 +226,30 @@
                   </tr>
                 </thead>
                 <tbody id="horizonTable"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card hidden" id="sensitivityCard">
+            <div class="card-head">
+              <h3>Sensitivity matrix</h3>
+              <p class="subtle">Auto-vary term, rate, and points to inspect payment, DSCR, and IRR.</p>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="data-table horizon">
+                <thead>
+                  <tr>
+                    <th>Term</th>
+                    <th>Rate</th>
+                    <th>Points</th>
+                    <th>Monthly payment</th>
+                    <th>DSCR</th>
+                    <th>Horizon IRR</th>
+                    <th>Horizon cashflow</th>
+                    <th>Horizon equity</th>
+                  </tr>
+                </thead>
+                <tbody id="sensitivityTable"></tbody>
               </table>
             </div>
           </div>

@@ -12,6 +12,13 @@ const ltvBadge = document.getElementById('ltvBadge');
 const comparisonNarrative = document.getElementById('comparisonNarrative');
 const scenarioTabs = document.getElementById('scenarioTabs');
 const horizonTable = document.getElementById('horizonTable');
+const sensitivityTable = document.getElementById('sensitivityTable');
+const sensitivityCard = document.getElementById('sensitivityCard');
+const basePointsInput = document.getElementById('basePoints');
+const termBandInput = document.getElementById('termBand');
+const rateBandInput = document.getElementById('rateBand');
+const pointsBandInput = document.getElementById('pointsBand');
+const sensitivityHorizonInput = document.getElementById('sensitivityHorizon');
 
 const defaultScenarios = [
   { term_years: 15, annual_interest_rate: 5.5 },
@@ -69,6 +76,13 @@ function formatPercent(value) {
     return '—';
   }
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function formatRatio(value) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return '—';
+  }
+  return `${value.toFixed(2)}x`;
 }
 
 function sampleSchedule(schedule, maxPoints = 720) {
@@ -246,6 +260,35 @@ function buildHorizonTable(data) {
         </tr>
       `;
       },
+    )
+    .join('');
+}
+
+function buildSensitivityTable(points) {
+  if (!sensitivityTable || !sensitivityCard) return;
+  if (!points || points.length === 0) {
+    sensitivityCard.classList.add('hidden');
+    sensitivityTable.innerHTML = '';
+    return;
+  }
+
+  sensitivityCard.classList.remove('hidden');
+  sensitivityTable.innerHTML = points
+    .map(
+      (point) => `
+        <tr>
+          <td>${point.term_years} yrs</td>
+          <td>${point.annual_interest_rate.toFixed(2)}%</td>
+          <td>${point.points_percent.toFixed(2)}%</td>
+          <td>${formatCurrency(point.monthly_payment)}</td>
+          <td>${formatRatio(point.dscr)}</td>
+          <td>${formatPercent(point.horizon_irr)}</td>
+          <td class="${point.horizon_cashflow >= 0 ? 'positive' : 'negative'}">${formatSignedCurrency(
+            point.horizon_cashflow,
+          )}</td>
+          <td>${formatCurrency(point.horizon_equity)}</td>
+        </tr>
+      `,
     )
     .join('');
 }
@@ -561,6 +604,7 @@ function renderResults(data) {
   comparisonNarrative.textContent = buildNarrative(data);
   updateCashflowChart(data);
   updateEquityChart(data);
+  buildSensitivityTable(data.sensitivity_matrix || []);
   resultsSection.classList.remove('hidden');
   if (emptyState) {
     emptyState.classList.add('hidden');
@@ -622,6 +666,13 @@ calculatorForm.addEventListener('submit', async (event) => {
     const monthlyRent = monthlyRentInput ? parseFloat(monthlyRentInput) : 0;
     const operatingCostsInput = document.getElementById('operatingCosts').value;
     const operatingCosts = operatingCostsInput ? parseFloat(operatingCostsInput) : 0;
+    const basePoints = basePointsInput ? parseFloat(basePointsInput.value || '0') : 0;
+    const termBand = termBandInput ? parseInt(termBandInput.value || '0', 10) : 0;
+    const rateBand = rateBandInput ? parseFloat(rateBandInput.value || '0') : 0;
+    const pointsBand = pointsBandInput ? parseFloat(pointsBandInput.value || '0') : 0;
+    const sensitivityHorizon = sensitivityHorizonInput
+      ? parseInt(sensitivityHorizonInput.value || '5', 10)
+      : 5;
     const scenarios = readScenarios();
 
     if (!Number.isFinite(loanAmount) || loanAmount <= 0) {
@@ -645,6 +696,14 @@ calculatorForm.addEventListener('submit', async (event) => {
       throw new Error('Interest rates must be zero or greater.');
     }
 
+    if (termBand < 0 || rateBand < 0 || pointsBand < 0) {
+      throw new Error('Sensitivity bands must be zero or greater.');
+    }
+
+    if (!Number.isFinite(sensitivityHorizon) || sensitivityHorizon < 1) {
+      throw new Error('Sensitivity horizon must be at least 1 year.');
+    }
+
     const response = await fetch('/api/calculate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -655,6 +714,13 @@ calculatorForm.addEventListener('submit', async (event) => {
         monthly_operating_costs: operatingCosts,
         schedule_limit: scheduleLimit,
         scenarios,
+        sensitivity: {
+          term_band: termBand,
+          rate_band: rateBand,
+          points_base: basePoints,
+          points_band: pointsBand,
+          horizon_years: sensitivityHorizon,
+        },
       }),
     });
 
