@@ -12,7 +12,6 @@ from pydantic import BaseModel, Field, validator
 from .mortgage_calculator import (
     AmortizationPayment,
     MortgageScenario,
-    calculate_monthly_payment,
     generate_amortization_schedule,
     summarize_scenarios,
 )
@@ -37,102 +36,6 @@ def _net_cashflow(
     return net
 
 
-def _irr(cashflows: Sequence[float]) -> float | None:
-    """Compute an annualized IRR from periodic cashflows using Newton's method."""
-    if not cashflows or all(cf == 0 for cf in cashflows):
-        return None
-
-    guess = 0.08 / 12  # monthly rate guess
-    for _ in range(100):
-        npv = 0.0
-        derivative = 0.0
-        for period, cash in enumerate(cashflows):
-            discount = (1 + guess) ** period
-            if discount == 0:
-                continue
-            npv += cash / discount
-            derivative -= (period * cash) / (discount * (1 + guess))
-
-        if abs(npv) < 1e-6:
-            return (1 + guess) ** 12 - 1
-
-        if derivative == 0:
-            break
-
-        guess -= npv / derivative
-
-    return None
-
-
-def _build_value_band(base: float, band: float, minimum: float) -> List[float]:
-    values = {max(minimum, base - band), max(minimum, base), max(minimum, base + band)}
-    return sorted(values)
-
-
-def _build_sensitivity_matrix(
-    loan_amount: float,
-    property_value: float,
-    base_scenario: MortgageScenario,
-    config: SensitivityConfig,
-    monthly_rent: float,
-    monthly_costs: float,
-) -> List[SensitivityPoint]:
-    if not config.enabled:
-        return []
-
-    term_values = [int(round(v)) for v in _build_value_band(base_scenario.term_years, config.term_band, 1)]
-    rate_values = _build_value_band(base_scenario.annual_interest_rate, config.rate_band, 0)
-    point_values = _build_value_band(config.points_base, config.points_band, 0)
-    horizon_months = config.horizon_years * 12
-
-    down_payment = max(property_value - loan_amount, 0.0)
-    matrix: List[SensitivityPoint] = []
-
-    for term_years in term_values:
-        for rate in rate_values:
-            scenario = MortgageScenario(term_years=term_years, annual_interest_rate=rate)
-            schedule = generate_amortization_schedule(loan_amount, scenario)
-            monthly_payment = calculate_monthly_payment(loan_amount, scenario)
-            debt_service = monthly_payment * 12
-            annual_noi = (monthly_rent - monthly_costs) * 12
-            dscr = None
-            if debt_service > 0:
-                dscr = annual_noi / debt_service if debt_service else None
-
-            horizon_count = min(horizon_months, len(schedule))
-            if horizon_count == 0:
-                horizon_count = len(schedule)
-            truncated_schedule = schedule[:horizon_count]
-            horizon_cashflow = _net_cashflow(truncated_schedule, monthly_rent, monthly_costs, horizon_count)
-            horizon_equity = _equity_built(truncated_schedule, horizon_count)
-
-            remaining_balance = truncated_schedule[-1].balance if truncated_schedule else 0.0
-
-            for points_percent in point_values:
-                points_cost = loan_amount * (points_percent / 100)
-                initial_equity = down_payment + points_cost
-                cashflows = [-initial_equity]
-                for payment in truncated_schedule:
-                    cashflows.append(monthly_rent - monthly_costs - payment.payment)
-                if cashflows and len(cashflows) > 1:
-                    cashflows[-1] += property_value - remaining_balance
-                horizon_irr = _irr(cashflows) if initial_equity > 0 else None
-
-                matrix.append(
-                    SensitivityPoint(
-                        term_years=term_years,
-                        annual_interest_rate=rate,
-                        points_percent=points_percent,
-                        monthly_payment=monthly_payment,
-                        dscr=dscr,
-                        horizon_years=min(config.horizon_years, term_years),
-                        horizon_cashflow=horizon_cashflow,
-                        horizon_equity=horizon_equity,
-                        horizon_irr=horizon_irr,
-                    )
-                )
-
-    return matrix
 
 
 class ScenarioInput(BaseModel):
@@ -145,34 +48,6 @@ class ScenarioInput(BaseModel):
         return MortgageScenario(
             term_years=self.term_years, annual_interest_rate=self.annual_interest_rate
         )
-
-
-class SensitivityConfig(BaseModel):
-    enabled: bool = Field(default=True, description="Toggle sensitivity matrix generation.")
-    term_band: int = Field(
-        default=5, ge=0, description="Years added/subtracted from the base term."
-    )
-    rate_band: float = Field(
-        default=0.5,
-        ge=0,
-        description="Percentage points added/subtracted from the base interest rate.",
-    )
-    points_base: float = Field(
-        default=0.0,
-        ge=0,
-        description="Baseline origination points (percentage of loan amount).",
-    )
-    points_band: float = Field(
-        default=0.5,
-        ge=0,
-        description="Points added/subtracted from the baseline for the matrix.",
-    )
-    horizon_years: int = Field(
-        default=5,
-        ge=1,
-        le=50,
-        description="Horizon in years used for cashflow, equity, and IRR calculations.",
-    )
 
 
 class CalculationRequest(BaseModel):
@@ -200,10 +75,6 @@ class CalculationRequest(BaseModel):
         default=None,
         ge=1,
         description="Maximum number of amortization rows returned per scenario.",
-    )
-    sensitivity: SensitivityConfig | None = Field(
-        default=None,
-        description="Configuration for building the sensitivity matrix.",
     )
 
     @validator("schedule_limit")
@@ -249,25 +120,12 @@ class ScenarioSummary(BaseModel):
     schedule: Sequence[PaymentResponse]
 
 
-class SensitivityPoint(BaseModel):
-    term_years: int
-    annual_interest_rate: float
-    points_percent: float
-    monthly_payment: float
-    dscr: float | None
-    horizon_years: int
-    horizon_cashflow: float
-    horizon_equity: float
-    horizon_irr: float | None
-
-
 class CalculationResponse(BaseModel):
     loan_amount: float
     property_value: float
     monthly_rent: float
     monthly_operating_costs: float
     scenarios: Sequence[ScenarioSummary]
-    sensitivity_matrix: Sequence[SensitivityPoint] | None
 
 
 app = FastAPI(title="Mortgage Comparison Tool", version="1.0.0")
@@ -348,22 +206,10 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
             )
         )
 
-    sensitivity_matrix = None
-    if request.sensitivity and scenarios:
-        sensitivity_matrix = _build_sensitivity_matrix(
-            loan_amount=request.loan_amount,
-            property_value=property_value,
-            base_scenario=scenarios[0],
-            config=request.sensitivity,
-            monthly_rent=monthly_rent,
-            monthly_costs=monthly_costs,
-        )
-
     return CalculationResponse(
         loan_amount=request.loan_amount,
         property_value=property_value,
         monthly_rent=monthly_rent,
         monthly_operating_costs=monthly_costs,
         scenarios=scenario_payload,
-        sensitivity_matrix=sensitivity_matrix,
     )
