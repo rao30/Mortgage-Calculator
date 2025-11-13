@@ -6,12 +6,87 @@ const emptyState = document.getElementById('emptyState');
 const formError = document.getElementById('formError');
 const scenarioTabs = document.getElementById('scenarioTabs');
 const horizonTable = document.getElementById('horizonTable');
+const purchasePriceInput = document.getElementById('purchasePrice');
+const closingCostInput = document.getElementById('closingCostValue');
+const closingCostMode = document.getElementById('closingCostMode');
+const closingCostPrefix = document.getElementById('closingCostPrefix');
+const saveScenarioButton = document.getElementById('saveScenario');
+const loadScenarioButton = document.getElementById('loadScenario');
+const scenarioFileInput = document.getElementById('scenarioFileInput');
+
+const scenarioDefaults = {
+  label: '',
+  firstTerm: 30,
+  firstRate: 6.25,
+  firstPercent: 80,
+  secondTerm: 15,
+  secondRate: 8.5,
+  secondPercent: 0,
+};
 
 const defaultScenarios = [
-  { term_years: 15, annual_interest_rate: 5.5 },
-  { term_years: 30, annual_interest_rate: 6.25 },
-  { term_years: 50, annual_interest_rate: 7 },
+  {
+    label: '15yr single note',
+    firstTerm: 15,
+    firstRate: 5.5,
+    firstPercent: 80,
+    secondTerm: null,
+    secondRate: null,
+    secondPercent: 0,
+  },
+  {
+    label: '30yr single note',
+    firstTerm: 30,
+    firstRate: 6.5,
+    firstPercent: 80,
+    secondTerm: null,
+    secondRate: null,
+    secondPercent: 0,
+  },
+  {
+    label: '5% down primary house hack',
+    firstTerm: 30,
+    firstRate: 6.5,
+    firstPercent: 95,
+    secondTerm: null,
+    secondRate: null,
+    secondPercent: 0,
+  },
+  {
+    label: '50yr single note',
+    firstTerm: 50,
+    firstRate: 7.0,
+    firstPercent: 80,
+    secondTerm: null,
+    secondRate: null,
+    secondPercent: 0,
+  },
+  {
+    label: '50/40/10 stacked',
+    firstTerm: 30,
+    firstRate: 7.5,
+    firstPercent: 50,
+    secondTerm: 30,
+    secondRate: 3.0,
+    secondPercent: 40,
+  },
+
 ];
+
+const defaultExpenses = {
+  propertyTaxes: 8000,
+  insurance: 2000,
+  repairsPercent: 5,
+  capexPercent: 5,
+  vacancyPercent: 0,
+  managementPercent: 5,
+  electricity: 0,
+  gas: 0,
+  waterSewer: 0,
+  hoaFees: 0,
+  garbage: 0,
+  otherExpenses: 0,
+};
 
 let mortgageData = null;
 let balanceChart = null;
@@ -56,6 +131,30 @@ function formatSignedCurrency(value) {
   return value >= 0 ? `+${formatted}` : `-${formatted}`;
 }
 
+function updateClosingCostPrefix() {
+  if (!closingCostPrefix || !closingCostMode) return;
+  closingCostPrefix.textContent = closingCostMode.value === 'percent' ? '%' : '$';
+}
+
+function escapeHtml(value) {
+  if (value === undefined || value === null) {
+    return '';
+  }
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatPercent(value, digits = 1) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return '—';
+  }
+  return `${Number(value).toFixed(digits)}%`;
+}
+
 function sampleSchedule(schedule, maxPoints = 720) {
   if (schedule.length <= maxPoints) {
     return schedule;
@@ -71,31 +170,242 @@ function sampleSchedule(schedule, maxPoints = 720) {
   return sampled;
 }
 
-function createScenarioRow(termYears = '', rate = '') {
+function createScenarioRow(config = {}) {
+  const values = { ...scenarioDefaults, ...config };
   const row = document.createElement('div');
   row.className = 'scenario-row';
   row.innerHTML = `
-    <label class="flex flex-col gap-2">
-      <span class="text-xs uppercase tracking-wide text-slate-400">Term (years)</span>
-      <input type="number" min="1" step="1" value="${termYears}" required />
-    </label>
-    <label class="flex flex-col gap-2">
-      <span class="text-xs uppercase tracking-wide text-slate-400">Rate (%)</span>
-      <input type="number" min="0" step="0.01" value="${rate}" required />
-    </label>
-    <button type="button" class="btn ghost remove-scenario">Remove</button>
+    <div class="scenario-row__top">
+      <label class="form-field scenario-row__label">
+        <span class="form-label">Scenario label</span>
+        <input type="text" class="text-input" data-field="label" placeholder="Scenario ${
+          scenariosContainer.children.length + 1
+        }" />
+      </label>
+      <div class="scenario-row__actions">
+        <button type="button" class="btn ghost duplicate-scenario">Duplicate</button>
+        <button type="button" class="btn ghost remove-scenario">Remove</button>
+      </div>
+    </div>
+    <div class="scenario-row__grid">
+      <label class="form-field">
+        <span class="form-label">First lien % of value</span>
+        <input type="number" data-field="firstPercent" min="1" max="100" step="1" required />
+      </label>
+      <label class="form-field">
+        <span class="form-label">First term (years)</span>
+        <input type="number" data-field="firstTerm" min="1" step="1" required />
+      </label>
+      <label class="form-field">
+        <span class="form-label">First rate (%)</span>
+        <input type="number" data-field="firstRate" min="0" step="0.01" required />
+      </label>
+    </div>
+    <div class="scenario-row__grid">
+      <label class="form-field">
+        <span class="form-label">Second lien %</span>
+        <input type="number" data-field="secondPercent" min="0" max="100" step="1" value="0" />
+      </label>
+      <label class="form-field">
+        <span class="form-label">Second term (years)</span>
+        <input type="number" data-field="secondTerm" min="1" step="1" />
+      </label>
+      <label class="form-field">
+        <span class="form-label">Second rate (%)</span>
+        <input type="number" data-field="secondRate" min="0" step="0.01" />
+      </label>
+    </div>
   `;
   scenariosContainer.appendChild(row);
+  setScenarioRowValues(row, values);
+}
+
+function setScenarioRowValues(row, values) {
+  row.querySelector('[data-field="label"]').value = values.label ?? '';
+  row.querySelector('[data-field="firstPercent"]').value = Number.isFinite(values.firstPercent)
+    ? values.firstPercent
+    : scenarioDefaults.firstPercent;
+  row.querySelector('[data-field="firstTerm"]').value = Number.isFinite(values.firstTerm)
+    ? values.firstTerm
+    : scenarioDefaults.firstTerm;
+  row.querySelector('[data-field="firstRate"]').value = Number.isFinite(values.firstRate)
+    ? values.firstRate
+    : scenarioDefaults.firstRate;
+  row.querySelector('[data-field="secondPercent"]').value = Number.isFinite(values.secondPercent)
+    ? values.secondPercent
+    : scenarioDefaults.secondPercent;
+  row.querySelector('[data-field="secondTerm"]').value = Number.isFinite(values.secondTerm)
+    ? values.secondTerm
+    : '';
+  row.querySelector('[data-field="secondRate"]').value = Number.isFinite(values.secondRate)
+    ? values.secondRate
+    : '';
+}
+
+function readScenarioConfig(row) {
+  return {
+    label: row.querySelector('[data-field="label"]').value.trim(),
+    firstPercent: parseFloat(row.querySelector('[data-field="firstPercent"]').value),
+    firstTerm: parseInt(row.querySelector('[data-field="firstTerm"]').value, 10),
+    firstRate: parseFloat(row.querySelector('[data-field="firstRate"]').value),
+    secondPercent: parseFloat(row.querySelector('[data-field="secondPercent"]').value) || 0,
+    secondTerm: parseInt(row.querySelector('[data-field="secondTerm"]').value, 10),
+    secondRate: parseFloat(row.querySelector('[data-field="secondRate"]').value),
+  };
 }
 
 function readScenarios() {
-  return Array.from(scenariosContainer.querySelectorAll('.scenario-row')).map((row) => {
-    const [termInput, rateInput] = row.querySelectorAll('input');
-    return {
-      term_years: parseInt(termInput.value, 10),
-      annual_interest_rate: parseFloat(rateInput.value),
+  return Array.from(scenariosContainer.querySelectorAll('.scenario-row')).map((row, index) => {
+    const config = readScenarioConfig(row);
+    const label = config.label || `Scenario ${index + 1}`;
+    const payload = {
+      label,
+      first_term_years: config.firstTerm,
+      first_annual_interest_rate: config.firstRate,
+      first_lien_percent: config.firstPercent,
+      second_lien_percent: config.secondPercent,
+      second_term_years: null,
+      second_annual_interest_rate: null,
     };
+
+    if (config.secondPercent > 0) {
+      payload.second_term_years = Number.isFinite(config.secondTerm) ? config.secondTerm : null;
+      payload.second_annual_interest_rate = Number.isFinite(config.secondRate)
+        ? config.secondRate
+        : null;
+    }
+
+    return payload;
   });
+}
+
+function readExpenseInputs() {
+  const parseValue = (id) => {
+    const input = document.getElementById(id);
+    if (!input) return 0;
+    const value = parseFloat(input.value);
+    return Number.isFinite(value) ? value : 0;
+  };
+
+  return {
+    property_taxes_annual: parseValue('propertyTaxes'),
+    insurance_annual: parseValue('insurance'),
+    repairs_percent: parseValue('repairsPercent'),
+    capex_percent: parseValue('capexPercent'),
+    vacancy_percent: parseValue('vacancyPercent'),
+    management_percent: parseValue('managementPercent'),
+    electricity_monthly: parseValue('electricity'),
+    gas_monthly: parseValue('gas'),
+    water_sewer_monthly: parseValue('waterSewer'),
+    hoa_monthly: parseValue('hoaFees'),
+    garbage_monthly: parseValue('garbage'),
+    other_monthly: parseValue('otherExpenses'),
+  };
+}
+
+function applyExpenseInputs(expenses = {}) {
+  const mappings = {
+    propertyTaxes: 'property_taxes_annual',
+    insurance: 'insurance_annual',
+    repairsPercent: 'repairs_percent',
+    capexPercent: 'capex_percent',
+    vacancyPercent: 'vacancy_percent',
+    managementPercent: 'management_percent',
+    electricity: 'electricity_monthly',
+    gas: 'gas_monthly',
+    waterSewer: 'water_sewer_monthly',
+    hoaFees: 'hoa_monthly',
+    garbage: 'garbage_monthly',
+    otherExpenses: 'other_monthly',
+  };
+
+  Object.entries(mappings).forEach(([inputId, expenseKey]) => {
+    const input = document.getElementById(inputId);
+    if (input && expenseKey in expenses) {
+      input.value = expenses[expenseKey];
+    }
+  });
+}
+
+function buildScenarioSnapshot() {
+  return {
+    version: 1,
+    generated_at: new Date().toISOString(),
+    inputs: {
+      purchase_price: purchasePriceInput ? Number(purchasePriceInput.value) : null,
+      closing_costs: {
+        value: closingCostInput ? Number(closingCostInput.value) : null,
+        mode: closingCostMode ? closingCostMode.value : 'percent',
+      },
+      monthly_rent: Number(document.getElementById('monthlyRent').value || 0),
+      schedule_limit: document.getElementById('scheduleLimit').value
+        ? Number(document.getElementById('scheduleLimit').value)
+        : null,
+      expenses: readExpenseInputs(),
+    },
+    scenarios: readScenarios(),
+  };
+}
+
+function hydrateScenarios(scenarios) {
+  scenariosContainer.innerHTML = '';
+  if (!Array.isArray(scenarios) || scenarios.length === 0) {
+    hydrateDefaultScenarios();
+    return;
+  }
+
+  scenarios.forEach((scenario) => {
+    const config = {
+      label: scenario.label || '',
+      firstTerm: scenario.first_term_years,
+      firstRate: scenario.first_annual_interest_rate,
+      firstPercent: scenario.first_lien_percent,
+      secondTerm: scenario.second_term_years,
+      secondRate: scenario.second_annual_interest_rate,
+      secondPercent: scenario.second_lien_percent,
+    };
+    createScenarioRow(config);
+  });
+}
+
+function loadScenarioSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') {
+    throw new Error('Invalid scenario file.');
+  }
+
+  const { inputs = {}, scenarios } = snapshot;
+  if (purchasePriceInput && inputs.purchase_price !== undefined) {
+    purchasePriceInput.value = inputs.purchase_price;
+  }
+  if (closingCostInput && inputs.closing_costs?.value !== undefined) {
+    closingCostInput.value = inputs.closing_costs.value;
+  }
+  if (closingCostMode && inputs.closing_costs?.mode) {
+    closingCostMode.value = inputs.closing_costs.mode;
+    updateClosingCostPrefix();
+  }
+  const rentInput = document.getElementById('monthlyRent');
+  if (rentInput && inputs.monthly_rent !== undefined) {
+    rentInput.value = inputs.monthly_rent;
+  }
+  const scheduleInput = document.getElementById('scheduleLimit');
+  if (scheduleInput && inputs.schedule_limit !== undefined && inputs.schedule_limit !== null) {
+    scheduleInput.value = inputs.schedule_limit;
+  } else if (scheduleInput) {
+    scheduleInput.value = '';
+  }
+  if (inputs.expenses) {
+    applyExpenseInputs(inputs.expenses);
+  }
+  hydrateScenarios(scenarios);
+
+  if (calculatorForm) {
+    if (typeof calculatorForm.requestSubmit === 'function') {
+      calculatorForm.requestSubmit();
+    } else {
+      calculatorForm.dispatchEvent(new Event('submit', { cancelable: true }));
+    }
+  }
 }
 
 function showError(message) {
@@ -110,21 +420,46 @@ function showError(message) {
 
 function buildSummaryTable(data) {
   summaryTable.innerHTML = data.scenarios
-    .map(
-      (scenario) => `
-        <tr>
-          <td>${scenario.term_years} yrs</td>
-          <td>${scenario.annual_interest_rate.toFixed(2)}%</td>
+    .map((scenario, index) => {
+      const components = scenario.components ?? [];
+      const breakdown = components
+        .map(
+          (component) => `
+            <span>
+              ${escapeHtml(component.label)}: ${formatPercent(component.share_percent, 0)}
+              • ${component.term_years}yr @ ${component.annual_interest_rate.toFixed(2)}%
+            </span>
+          `,
+        )
+        .join('<br />');
+
+      const selectedClass = index === activeScenarioIndex ? 'selected' : '';
+      return `
+        <tr class="${selectedClass}">
+          <td>
+            <div class="structure-label">${escapeHtml(scenario.label)}</div>
+            ${breakdown ? `<div class="structure-breakdown">${breakdown}</div>` : ''}
+          </td>
           <td>${formatCurrency(scenario.monthly_payment)}</td>
           <td class="${scenario.monthly_cashflow >= 0 ? 'positive' : 'negative'}">
             ${formatSignedCurrency(scenario.monthly_cashflow)}
           </td>
+          <td>${
+            Number.isFinite(scenario.cash_to_close)
+              ? formatCurrency(scenario.cash_to_close)
+              : '—'
+          }</td>
+          <td>${
+            scenario.cash_on_cash_return !== null
+              ? formatPercent(scenario.cash_on_cash_return * 100, 1)
+              : '—'
+          }</td>
           <td>${formatCurrency(scenario.year_one_equity)}</td>
           <td>${formatCurrency(scenario.five_year_equity)}</td>
           <td>${formatCurrency(scenario.total_interest)}</td>
         </tr>
-      `,
-    )
+      `;
+    })
     .join('');
 }
 
@@ -136,11 +471,22 @@ function buildScenarioTabs(data) {
         <button type="button" class="scenario-tab ${
           index === activeScenarioIndex ? 'active' : ''
         }" data-index="${index}">
-          ${scenario.term_years}yr <span class="rate">${scenario.annual_interest_rate.toFixed(2)}%</span>
+          ${escapeHtml(scenario.label)}
         </button>
       `,
     )
     .join('');
+
+  const summaryRows = summaryTable?.querySelectorAll('tr');
+  if (summaryRows) {
+    summaryRows.forEach((row, index) => {
+      if (index === activeScenarioIndex) {
+        row.classList.add('selected');
+      } else {
+        row.classList.remove('selected');
+      }
+    });
+  }
 }
 
 function buildScheduleTable(schedule) {
@@ -164,6 +510,17 @@ function buildHorizonTable(data) {
   horizonTable.innerHTML = data.scenarios
     .map(
       (scenario) => {
+        const components = scenario.components ?? [];
+        const breakdown = components
+          .map(
+            (component) => `
+              <span>
+                ${escapeHtml(component.label)}: ${formatPercent(component.share_percent, 0)}
+                • ${component.term_years}yr @ ${component.annual_interest_rate.toFixed(2)}%
+              </span>
+            `,
+          )
+          .join('<br />');
         const renderCell = (cash, equity) => {
           const total = cash + equity;
           const cashClass = cash >= 0 ? 'positive' : 'negative';
@@ -181,7 +538,10 @@ function buildHorizonTable(data) {
 
         return `
         <tr>
-          <td>${scenario.term_years} yrs @ ${scenario.annual_interest_rate.toFixed(2)}%</td>
+          <td>
+            <div class="structure-label">${escapeHtml(scenario.label)}</div>
+            ${breakdown ? `<div class="structure-breakdown">${breakdown}</div>` : ''}
+          </td>
           <td>${renderCell(scenario.cashflow_five_year, scenario.five_year_equity)}</td>
           <td>${renderCell(scenario.cashflow_ten_year, scenario.ten_year_equity)}</td>
           <td>${renderCell(scenario.cashflow_fifteen_year, scenario.fifteen_year_equity)}</td>
@@ -324,6 +684,17 @@ function updateScenarioDetails(index) {
   buildScheduleTable(scenario.schedule);
   updateBalanceChart(scenario.schedule);
   updateCompositionChart(scenario.schedule);
+
+  const summaryRows = summaryTable?.querySelectorAll('tr');
+  if (summaryRows) {
+    summaryRows.forEach((row, rowIndex) => {
+      if (rowIndex === index) {
+        row.classList.add('selected');
+      } else {
+        row.classList.remove('selected');
+      }
+    });
+  }
 }
 
 function renderResults(data) {
@@ -350,30 +721,122 @@ if (scenarioTabs) {
 }
 
 scenariosContainer.addEventListener('click', (event) => {
-  if (event.target.classList.contains('remove-scenario')) {
-    event.target.closest('.scenario-row').remove();
+  const removeButton = event.target.closest('.remove-scenario');
+  if (removeButton) {
+    removeButton.closest('.scenario-row').remove();
     if (scenariosContainer.children.length === 0) {
       createScenarioRow();
     }
+    return;
+  }
+
+  const duplicateButton = event.target.closest('.duplicate-scenario');
+  if (duplicateButton) {
+    const sourceRow = duplicateButton.closest('.scenario-row');
+    if (!sourceRow) return;
+    const config = readScenarioConfig(sourceRow);
+    if (config.label) {
+      config.label = `${config.label} copy`;
+    }
+    createScenarioRow(config);
   }
 });
 
 function hydrateDefaultScenarios() {
   scenariosContainer.innerHTML = '';
   defaultScenarios.forEach((scenario) => {
-    createScenarioRow(scenario.term_years, scenario.annual_interest_rate);
+    createScenarioRow(scenario);
   });
 }
 
 hydrateDefaultScenarios();
-document.getElementById('loanAmount').value = 450000;
-document.getElementById('propertyValue').value = 525000;
-document.getElementById('monthlyRent').value = 4200;
-document.getElementById('operatingCosts').value = 950;
+if (purchasePriceInput) {
+  purchasePriceInput.value = 500000;
+}
+if (closingCostInput) {
+  closingCostInput.value = 3;
+}
+if (closingCostMode) {
+  closingCostMode.value = 'percent';
+  closingCostMode.addEventListener('change', updateClosingCostPrefix);
+}
+updateClosingCostPrefix();
+[
+  'propertyTaxes',
+  'insurance',
+  'repairsPercent',
+  'capexPercent',
+  'vacancyPercent',
+  'managementPercent',
+  'electricity',
+  'gas',
+  'waterSewer',
+  'hoaFees',
+  'garbage',
+  'otherExpenses',
+].forEach((id) => {
+  const input = document.getElementById(id);
+  if (input) {
+    const defaultValue = defaultExpenses[id];
+    input.value = defaultValue !== undefined ? defaultValue : 0;
+  }
+});
+document.getElementById('monthlyRent').value = 5700;
 
 document.getElementById('addScenario').addEventListener('click', () => {
   createScenarioRow();
 });
+
+if (saveScenarioButton) {
+  saveScenarioButton.addEventListener('click', () => {
+    try {
+      const snapshot = buildScenarioSnapshot();
+      const serialized = JSON.stringify(snapshot, null, 2);
+      const blob = new Blob([serialized], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `scenario-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error(error);
+      showError('Unable to save scenario.');
+    }
+  });
+}
+
+if (loadScenarioButton && scenarioFileInput) {
+  loadScenarioButton.addEventListener('click', () => {
+    scenarioFileInput.value = '';
+    scenarioFileInput.click();
+  });
+
+  scenarioFileInput.addEventListener('change', (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (loadEvent) => {
+      try {
+        const text = loadEvent.target?.result;
+        const snapshot = JSON.parse(text);
+        loadScenarioSnapshot(snapshot);
+        showError('');
+      } catch (error) {
+        console.error(error);
+        showError('Unable to load scenario file.');
+      }
+    };
+    reader.onerror = () => {
+      showError('Unable to read scenario file.');
+    };
+    reader.readAsText(file);
+  });
+}
 
 const calculatorForm = document.getElementById('calculatorForm');
 calculatorForm.addEventListener('submit', async (event) => {
@@ -385,47 +848,75 @@ calculatorForm.addEventListener('submit', async (event) => {
   submitButton.textContent = 'Generating...';
 
   try {
-    const loanAmount = parseFloat(document.getElementById('loanAmount').value);
-    const propertyValueInput = document.getElementById('propertyValue').value;
-    const propertyValue = propertyValueInput ? parseFloat(propertyValueInput) : null;
+    const purchasePrice =
+      purchasePriceInput && purchasePriceInput.value ? parseFloat(purchasePriceInput.value) : 0;
+    const closingCostValue =
+      closingCostInput && closingCostInput.value ? parseFloat(closingCostInput.value) : 0;
+    const closingCostModeValue = closingCostMode ? closingCostMode.value : 'percent';
     const scheduleLimitInput = document.getElementById('scheduleLimit').value;
     const scheduleLimit = scheduleLimitInput ? parseInt(scheduleLimitInput, 10) : null;
     const monthlyRentInput = document.getElementById('monthlyRent').value;
     const monthlyRent = monthlyRentInput ? parseFloat(monthlyRentInput) : 0;
-    const operatingCostsInput = document.getElementById('operatingCosts').value;
-    const operatingCosts = operatingCostsInput ? parseFloat(operatingCostsInput) : 0;
     const scenarios = readScenarios();
 
-    if (!Number.isFinite(loanAmount) || loanAmount <= 0) {
-      throw new Error('Please enter a valid loan amount.');
+    if (!Number.isFinite(purchasePrice) || purchasePrice <= 0) {
+      throw new Error('Purchase price must be a positive number.');
     }
 
-    if (propertyValue !== null && (!Number.isFinite(propertyValue) || propertyValue <= 0)) {
-      throw new Error('Property value must be a positive number.');
-    }
-
-    if (scenarios.some((scenario) => !Number.isFinite(scenario.term_years) || scenario.term_years <= 0)) {
-      throw new Error('Each scenario needs a positive term in years.');
+    if (!Number.isFinite(closingCostValue) || closingCostValue < 0) {
+      throw new Error('Closing costs must be zero or greater.');
     }
 
     if (
       scenarios.some(
         (scenario) =>
-          !Number.isFinite(scenario.annual_interest_rate) || scenario.annual_interest_rate < 0,
+          !Number.isFinite(scenario.first_term_years) || scenario.first_term_years <= 0,
       )
     ) {
-      throw new Error('Interest rates must be zero or greater.');
+      throw new Error('Each scenario needs a positive first-lien term in years.');
+    }
+
+    if (
+      scenarios.some(
+        (scenario) =>
+          !Number.isFinite(scenario.first_annual_interest_rate) ||
+          scenario.first_annual_interest_rate < 0,
+      )
+    ) {
+      throw new Error('First-lien interest rates must be zero or greater.');
+    }
+
+    if (
+      scenarios.some(
+        (scenario) =>
+          scenario.second_lien_percent > 0 &&
+          (!Number.isFinite(scenario.second_term_years) || scenario.second_term_years <= 0),
+      )
+    ) {
+      throw new Error('Second-lien scenarios need a positive term in years.');
+    }
+
+    if (
+      scenarios.some(
+        (scenario) =>
+          scenario.second_lien_percent > 0 &&
+          (!Number.isFinite(scenario.second_annual_interest_rate) ||
+            scenario.second_annual_interest_rate < 0),
+      )
+    ) {
+      throw new Error('Second-lien interest rates must be zero or greater.');
     }
 
     const response = await fetch('/api/calculate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        loan_amount: loanAmount,
-        property_value: propertyValue,
+        purchase_price: purchasePrice,
+        closing_costs_value: closingCostValue,
+        closing_costs_mode: closingCostModeValue,
         monthly_rent: monthlyRent,
-        monthly_operating_costs: operatingCosts,
         schedule_limit: scheduleLimit,
+        expenses: readExpenseInputs(),
         scenarios,
       }),
     });

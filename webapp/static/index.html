@@ -39,53 +39,43 @@
           <form id="calculatorForm" class="form-grid">
             <div class="grid-two">
               <label class="form-field">
-                <span class="form-label">Loan amount</span>
+                <span class="form-label">Purchase price</span>
                 <div class="form-input">
                   <span class="prefix">$</span>
                   <input
-                    id="loanAmount"
+                    id="purchasePrice"
                     type="number"
                     min="50000"
                     step="1000"
-                    placeholder="450000"
-                    required
+                    placeholder="500000"
                   />
                 </div>
               </label>
               <label class="form-field">
-                <span class="form-label">Property value</span>
-                <div class="form-input">
-                  <span class="prefix">$</span>
+                <span class="form-label">Closing costs</span>
+                <div class="form-input closing-cost-input">
+                  <span class="prefix" id="closingCostPrefix">%</span>
                   <input
-                    id="propertyValue"
+                    id="closingCostValue"
                     type="number"
-                    min="50000"
-                    step="1000"
-                    placeholder="525000"
+                    min="0"
+                    step="0.01"
+                    placeholder="3"
                   />
+                  <select id="closingCostMode" class="select closing-cost-mode">
+                    <option value="percent">% of purchase price</option>
+                    <option value="fixed">Fixed amount</option>
+                  </select>
                 </div>
               </label>
             </div>
 
-            <div class="grid-three">
+            <div class="grid-two">
               <label class="form-field">
                 <span class="form-label">Monthly rent / income</span>
                 <div class="form-input">
                   <span class="prefix">$</span>
-                  <input id="monthlyRent" type="number" min="0" step="100" placeholder="4200" />
-                </div>
-              </label>
-              <label class="form-field">
-                <span class="form-label">Operating costs</span>
-                <div class="form-input">
-                  <span class="prefix">$</span>
-                  <input
-                    id="operatingCosts"
-                    type="number"
-                    min="0"
-                    step="50"
-                    placeholder="950"
-                  />
+                  <input id="monthlyRent" type="number" min="0" step="100" placeholder="5700" />
                 </div>
               </label>
               <label class="form-field">
@@ -100,6 +90,101 @@
                 />
               </label>
             </div>
+
+            <section class="expenses-panel">
+              <div class="form-head">
+                <div>
+                  <p class="eyebrow">Expenses</p>
+                  <p class="subtle">Maintenance, vacancy, capital expenditures, and management fees are expressed as percentages of gross monthly income.</p>
+                </div>
+              </div>
+              <div class="expenses-grid">
+                <label class="form-field">
+                  <span class="form-label">Property taxes (annual)</span>
+                  <div class="form-input">
+                    <span class="prefix">$</span>
+                    <input id="propertyTaxes" type="number" min="0" step="100" placeholder="8000" />
+                  </div>
+                </label>
+                <label class="form-field">
+                  <span class="form-label">Insurance (annual)</span>
+                  <div class="form-input">
+                    <span class="prefix">$</span>
+                    <input id="insurance" type="number" min="0" step="100" placeholder="2000" />
+                  </div>
+                </label>
+                <label class="form-field">
+                  <span class="form-label">Repairs &amp; maintenance (%)</span>
+                  <div class="form-input">
+                    <input id="repairsPercent" type="number" min="0" step="0.1" placeholder="5" />
+                    <span class="suffix">%</span>
+                  </div>
+                </label>
+                <label class="form-field">
+                  <span class="form-label">Capital expenditures (%)</span>
+                  <div class="form-input">
+                    <input id="capexPercent" type="number" min="0" step="0.1" placeholder="5" />
+                    <span class="suffix">%</span>
+                  </div>
+                </label>
+                <label class="form-field">
+                  <span class="form-label">Vacancy (%)</span>
+                  <div class="form-input">
+                    <input id="vacancyPercent" type="number" min="0" step="0.1" placeholder="0" />
+                    <span class="suffix">%</span>
+                  </div>
+                </label>
+                <label class="form-field">
+                  <span class="form-label">Management fees (%)</span>
+                  <div class="form-input">
+                    <input id="managementPercent" type="number" min="0" step="0.1" placeholder="5" />
+                    <span class="suffix">%</span>
+                  </div>
+                </label>
+                <label class="form-field">
+                  <span class="form-label">Electricity (monthly)</span>
+                  <div class="form-input">
+                    <span class="prefix">$</span>
+                    <input id="electricity" type="number" min="0" step="25" placeholder="0" />
+                  </div>
+                </label>
+                <label class="form-field">
+                  <span class="form-label">Gas (monthly)</span>
+                  <div class="form-input">
+                    <span class="prefix">$</span>
+                    <input id="gas" type="number" min="0" step="25" placeholder="0" />
+                  </div>
+                </label>
+                <label class="form-field">
+                  <span class="form-label">Water &amp; sewer (monthly)</span>
+                  <div class="form-input">
+                    <span class="prefix">$</span>
+                    <input id="waterSewer" type="number" min="0" step="25" placeholder="0" />
+                  </div>
+                </label>
+                <label class="form-field">
+                  <span class="form-label">HOA fees (monthly)</span>
+                  <div class="form-input">
+                    <span class="prefix">$</span>
+                    <input id="hoaFees" type="number" min="0" step="25" placeholder="0" />
+                  </div>
+                </label>
+                <label class="form-field">
+                  <span class="form-label">Garbage (monthly)</span>
+                  <div class="form-input">
+                    <span class="prefix">$</span>
+                    <input id="garbage" type="number" min="0" step="25" placeholder="0" />
+                  </div>
+                </label>
+                <label class="form-field">
+                  <span class="form-label">Other (monthly)</span>
+                  <div class="form-input">
+                    <span class="prefix">$</span>
+                    <input id="otherExpenses" type="number" min="0" step="25" placeholder="0" />
+                  </div>
+                </label>
+              </div>
+            </section>
 
             <div class="scenario-panel">
               <div class="scenario-head">
@@ -117,8 +202,13 @@
                 <p class="subtle">Includes payoff curves, amortization tables, and ROI-grade ratios.</p>
                 <p id="formError" class="text-sm text-rose-300 hidden"></p>
               </div>
-              <button type="submit" class="btn primary">Generate investor brief</button>
+              <div class="cta-actions">
+                <button type="button" id="loadScenario" class="btn ghost">Load scenario</button>
+                <button type="button" id="saveScenario" class="btn ghost">Save scenario</button>
+                <button type="submit" class="btn primary">Generate investor brief</button>
+              </div>
             </div>
+            <input id="scenarioFileInput" type="file" accept="application/json" class="hidden" />
           </form>
         </section>
 
@@ -135,10 +225,11 @@
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Term</th>
-                    <th>Rate</th>
+                    <th>Structure</th>
                     <th>Monthly payment</th>
                     <th>Cashflow</th>
+                    <th>Cash to close</th>
+                    <th>Cash-on-cash</th>
                     <th>Year 1 equity</th>
                     <th>5-year equity</th>
                     <th>Total interest</th>

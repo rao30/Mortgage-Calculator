@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Sequence
+from typing import List, Sequence, Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -13,7 +13,7 @@ from .mortgage_calculator import (
     AmortizationPayment,
     MortgageScenario,
     generate_amortization_schedule,
-    summarize_scenarios,
+    total_interest,
 )
 
 
@@ -36,26 +36,101 @@ def _net_cashflow(
     return net
 
 
+def _merge_component_schedules(
+    schedules: Sequence[Sequence[AmortizationPayment]],
+) -> list[AmortizationPayment]:
+    """Combine multiple amortization schedules into a single blended view."""
+    if not schedules:
+        return []
+
+    horizon = max(len(schedule) for schedule in schedules)
+    merged: list[AmortizationPayment] = []
+
+    for idx in range(horizon):
+        payment = principal = interest = balance = 0.0
+        for schedule in schedules:
+            if idx < len(schedule):
+                component_payment = schedule[idx]
+                payment += component_payment.payment
+                principal += component_payment.principal
+                interest += component_payment.interest
+                balance += component_payment.balance
+        merged.append(
+            AmortizationPayment(
+                payment_number=idx + 1,
+                payment=payment,
+                principal=principal,
+                interest=interest,
+                balance=balance,
+            )
+        )
+
+    return merged
+
 
 
 class ScenarioInput(BaseModel):
-    term_years: int = Field(..., gt=0, description="Loan term in years")
-    annual_interest_rate: float = Field(
-        ..., ge=0, description="Annual interest rate percentage"
+    label: str | None = Field(
+        default=None,
+        description="Optional label used throughout the UI to identify the scenario.",
+    )
+    first_term_years: int = Field(..., gt=0, description="First lien term in years")
+    first_annual_interest_rate: float = Field(
+        ..., ge=0, description="First lien annual interest rate percentage"
+    )
+    first_lien_percent: float = Field(
+        ..., gt=0, le=100, description="Percent of property value financed by the first lien."
+    )
+    second_lien_percent: float = Field(
+        default=0,
+        ge=0,
+        le=100,
+        description="Percent of property value financed by the second lien.",
+    )
+    second_term_years: int | None = Field(
+        default=None, gt=0, description="Second lien term in years."
+    )
+    second_annual_interest_rate: float | None = Field(
+        default=None, ge=0, description="Second lien annual interest rate percentage."
     )
 
-    def to_scenario(self) -> MortgageScenario:
-        return MortgageScenario(
-            term_years=self.term_years, annual_interest_rate=self.annual_interest_rate
-        )
+    @validator("second_term_years", "second_annual_interest_rate", always=True)
+    def _validate_second_lien_fields(
+        cls, value: int | float | None, values: dict[str, object], field
+    ) -> int | float | None:
+        second_percent = values.get("second_lien_percent", 0) or 0
+        if second_percent > 0 and value is None:
+            raise ValueError(f"{field.name.replace('_', ' ')} is required for a second lien")
+        if second_percent == 0:
+            return None
+        return value
+
+    @validator("second_lien_percent")
+    def _validate_percentages(cls, second_percent: float, values: dict[str, object]) -> float:
+        first_percent = values.get("first_lien_percent", 0) or 0
+        total = first_percent + second_percent
+        if total > 100.0001:
+            raise ValueError("Combined lien percentages cannot exceed 100% of the property value")
+        return second_percent
 
 
 class CalculationRequest(BaseModel):
-    loan_amount: float = Field(..., gt=0, description="Loan principal amount")
-    property_value: float | None = Field(
-        default=None,
+    loan_amount: float | None = Field(
+        default=None, ge=0, description="Optional aggregate loan principal amount."
+    )
+    purchase_price: float = Field(
+        default=500_000,
         gt=0,
-        description="Home value used to compute LTV and equity share. Defaults to loan amount.",
+        description="Home value used to compute lien allocations and equity share.",
+    )
+    closing_costs_value: float = Field(
+        default=3.0,
+        ge=0,
+        description="Closing costs value interpreted based on the selected mode.",
+    )
+    closing_costs_mode: Literal["percent", "fixed"] = Field(
+        default="percent",
+        description="Whether closing costs represent a percent of the purchase price or a fixed dollar amount.",
     )
     monthly_rent: float = Field(
         default=0,
@@ -66,6 +141,10 @@ class CalculationRequest(BaseModel):
         default=0,
         ge=0,
         description="Taxes, insurance, HOA, maintenance, and other recurring costs.",
+    )
+    expenses: ExpenseInputs | None = Field(
+        default=None,
+        description="Detailed expense inputs used to derive operating costs.",
     )
     scenarios: List[ScenarioInput] | None = Field(
         default=None,
@@ -102,12 +181,105 @@ class PaymentResponse(BaseModel):
         )
 
 
+class ExpenseInputs(BaseModel):
+    property_taxes_annual: float = Field(
+        default=8000,
+        ge=0,
+        description="Annual property tax expense.",
+    )
+    insurance_annual: float = Field(
+        default=2000,
+        ge=0,
+        description="Annual insurance expense.",
+    )
+    repairs_percent: float = Field(
+        default=5,
+        ge=0,
+        description="Repairs & maintenance percentage of gross monthly rent.",
+    )
+    capex_percent: float = Field(
+        default=5,
+        ge=0,
+        description="Capital expenditures percentage of gross monthly rent.",
+    )
+    vacancy_percent: float = Field(
+        default=0,
+        ge=0,
+        description="Vacancy allowance percentage of gross monthly rent.",
+    )
+    management_percent: float = Field(
+        default=5,
+        ge=0,
+        description="Management fee percentage of gross monthly rent.",
+    )
+    electricity_monthly: float = Field(
+        default=0,
+        ge=0,
+        description="Monthly electricity expense.",
+    )
+    gas_monthly: float = Field(
+        default=0,
+        ge=0,
+        description="Monthly gas expense.",
+    )
+    water_sewer_monthly: float = Field(
+        default=0,
+        ge=0,
+        description="Monthly water & sewer expense.",
+    )
+    hoa_monthly: float = Field(
+        default=0,
+        ge=0,
+        description="Monthly HOA fees.",
+    )
+    garbage_monthly: float = Field(
+        default=0,
+        ge=0,
+        description="Monthly garbage expense.",
+    )
+    other_monthly: float = Field(
+        default=0,
+        ge=0,
+        description="Other recurring monthly expenses.",
+    )
+
+    @validator("repairs_percent", "capex_percent", "vacancy_percent", "management_percent")
+    def _percent_non_negative(cls, value: float) -> float:
+        if value < 0:
+            raise ValueError("Expense percentages cannot be negative")
+        return value
+
+    def monthly_operating_costs(self, monthly_rent: float) -> float:
+        fixed_monthly = (
+            (self.property_taxes_annual / 12.0)
+            + (self.insurance_annual / 12.0)
+            + self.electricity_monthly
+            + self.gas_monthly
+            + self.water_sewer_monthly
+            + self.hoa_monthly
+            + self.garbage_monthly
+            + self.other_monthly
+        )
+        percent_factor = (
+            self.repairs_percent
+            + self.capex_percent
+            + self.vacancy_percent
+            + self.management_percent
+        ) / 100.0
+        variable_monthly = monthly_rent * percent_factor
+        return fixed_monthly + variable_monthly
+
+
 class ScenarioSummary(BaseModel):
-    term_years: int
-    annual_interest_rate: float
+    label: str
+    total_financed: float
+    down_payment_amount: float
+    down_payment_percent: float
     monthly_payment: float
     total_interest: float
     monthly_cashflow: float
+    cash_on_cash_return: float | None
+    cash_to_close: float
     loan_to_value: float | None
     year_one_equity: float
     five_year_equity: float
@@ -117,7 +289,22 @@ class ScenarioSummary(BaseModel):
     cashflow_five_year: float
     cashflow_ten_year: float
     cashflow_fifteen_year: float
+    components: Sequence["LoanComponentSummary"]
     schedule: Sequence[PaymentResponse]
+
+
+class LoanComponentSummary(BaseModel):
+    label: str
+    amount: float
+    share_percent: float
+    term_years: int
+    annual_interest_rate: float
+    monthly_payment: float
+    total_interest: float
+
+
+ScenarioSummary.update_forward_refs()
+CalculationRequest.update_forward_refs()
 
 
 class CalculationResponse(BaseModel):
@@ -146,53 +333,175 @@ def read_index() -> str:
 @app.post("/api/calculate", response_model=CalculationResponse)
 def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
     """Calculate mortgage comparisons and amortization schedules."""
-    property_value = request.property_value or request.loan_amount
+    purchase_price = request.purchase_price or 500_000
+    base_loan_amount = request.loan_amount or purchase_price
+    if request.closing_costs_mode == "percent":
+        closing_costs_amount = purchase_price * (request.closing_costs_value / 100)
+    else:
+        closing_costs_amount = request.closing_costs_value
+    closing_costs_amount = max(0.0, closing_costs_amount)
     monthly_rent = request.monthly_rent
-    monthly_costs = request.monthly_operating_costs
-    loan_to_value = (
-        request.loan_amount / property_value if property_value else None
-    )
+    if request.expenses is not None:
+        monthly_costs = request.expenses.monthly_operating_costs(monthly_rent)
+    else:
+        monthly_costs = request.monthly_operating_costs
 
-    scenarios = (
-        [scenario.to_scenario() for scenario in request.scenarios]
-        if request.scenarios
-        else [
-            MortgageScenario(term_years=15, annual_interest_rate=5.5),
-            MortgageScenario(term_years=30, annual_interest_rate=6.25),
-            MortgageScenario(term_years=50, annual_interest_rate=7.0),
-        ]
-    )
+    default_structures = [
+        ScenarioInput(
+            label="15yr single note",
+            first_term_years=15,
+            first_annual_interest_rate=5.5,
+            first_lien_percent=80,
+        ),
+        ScenarioInput(
+            label="30yr single note",
+            first_term_years=30,
+            first_annual_interest_rate=6.5,
+            first_lien_percent=80,
+        ),
+         ScenarioInput(
+            label="5% down primary house hack",
+            first_term_years=30,
+            first_annual_interest_rate=6.5,
+            first_lien_percent=95,
+        ),
+        ScenarioInput(
+            label="50yr single note",
+            first_term_years=50,
+            first_annual_interest_rate=7.0,
+            first_lien_percent=80,
+        ),
+        ScenarioInput(
+            label="50/40/10 stacked",
+            first_term_years=30,
+            first_annual_interest_rate=7.5,
+            first_lien_percent=50,
+            second_term_years=30,
+            second_annual_interest_rate=3.0,
+            second_lien_percent=40,
+        ),
 
-    summary = summarize_scenarios(request.loan_amount, scenarios)
+    ]
+
+    scenario_inputs = request.scenarios or default_structures
     scenario_payload: list[ScenarioSummary] = []
 
-    for scenario, monthly_payment, total_interest_paid in summary:
-        full_schedule = generate_amortization_schedule(request.loan_amount, scenario)
-        schedule = (
-            full_schedule[: request.schedule_limit]
-            if request.schedule_limit is not None
-            else full_schedule
+    for index, scenario in enumerate(scenario_inputs, start=1):
+        first_amount = purchase_price * (scenario.first_lien_percent / 100)
+        component_summaries: list[LoanComponentSummary] = []
+        component_schedules: list[Sequence[AmortizationPayment]] = []
+        total_financed = 0.0
+
+        if first_amount <= 0:
+            raise HTTPException(
+                status_code=400, detail="First lien percent must result in financed dollars."
+            )
+
+        first_note = MortgageScenario(
+            term_years=scenario.first_term_years,
+            annual_interest_rate=scenario.first_annual_interest_rate,
+        )
+        first_schedule = generate_amortization_schedule(first_amount, first_note)
+        component_schedules.append(first_schedule)
+        total_financed += first_amount
+        component_summaries.append(
+            LoanComponentSummary(
+                label="First lien",
+                amount=first_amount,
+                share_percent=scenario.first_lien_percent,
+                term_years=first_note.term_years,
+                annual_interest_rate=first_note.annual_interest_rate,
+                monthly_payment=first_schedule[0].payment if first_schedule else 0.0,
+                total_interest=total_interest(first_schedule),
+            )
         )
 
-        year_one_equity = _equity_built(full_schedule, 12)
-        five_year_equity = _equity_built(full_schedule, 60)
-        ten_year_equity = _equity_built(full_schedule, 120)
-        fifteen_year_equity = _equity_built(full_schedule, 180)
-        total_equity = _equity_built(full_schedule, scenario.total_payments())
+        if scenario.second_lien_percent > 0:
+            second_amount = purchase_price * (scenario.second_lien_percent / 100)
+            second_rate = (
+                scenario.second_annual_interest_rate
+                if scenario.second_annual_interest_rate is not None
+                else scenario.first_annual_interest_rate
+            )
+            second_note = MortgageScenario(
+                term_years=scenario.second_term_years or scenario.first_term_years,
+                annual_interest_rate=second_rate,
+            )
+            second_schedule = generate_amortization_schedule(second_amount, second_note)
+            component_schedules.append(second_schedule)
+            total_financed += second_amount
+            component_summaries.append(
+                LoanComponentSummary(
+                    label="Second lien",
+                    amount=second_amount,
+                    share_percent=scenario.second_lien_percent,
+                    term_years=second_note.term_years,
+                    annual_interest_rate=second_note.annual_interest_rate,
+                    monthly_payment=second_schedule[0].payment if second_schedule else 0.0,
+                    total_interest=total_interest(second_schedule),
+                )
+            )
+
+        blended_schedule = _merge_component_schedules(component_schedules)
+        truncated_schedule = (
+            blended_schedule[: request.schedule_limit]
+            if request.schedule_limit is not None
+            else blended_schedule
+        )
+
+        monthly_payment = blended_schedule[0].payment if blended_schedule else 0.0
+        total_interest_paid = sum(total_interest(s) for s in component_schedules)
+
+        year_one_equity = _equity_built(blended_schedule, 12)
+        five_year_equity = _equity_built(blended_schedule, 60)
+        ten_year_equity = _equity_built(blended_schedule, 120)
+        fifteen_year_equity = _equity_built(blended_schedule, 180)
+        total_equity = _equity_built(blended_schedule, len(blended_schedule))
         monthly_cashflow = monthly_rent - monthly_costs - monthly_payment
-        cashflow_five_year = _net_cashflow(full_schedule, monthly_rent, monthly_costs, 60)
-        cashflow_ten_year = _net_cashflow(full_schedule, monthly_rent, monthly_costs, 120)
-        cashflow_fifteen_year = _net_cashflow(full_schedule, monthly_rent, monthly_costs, 180)
+        cashflow_five_year = _net_cashflow(blended_schedule, monthly_rent, monthly_costs, 60)
+        cashflow_ten_year = _net_cashflow(blended_schedule, monthly_rent, monthly_costs, 120)
+        cashflow_fifteen_year = _net_cashflow(
+            blended_schedule, monthly_rent, monthly_costs, 180
+        )
         interest_to_equity_ratio = (
             total_interest_paid / total_equity if total_equity else float("inf")
         )
+        down_payment_percent = max(
+            0.0, 100.0 - scenario.first_lien_percent - scenario.second_lien_percent
+        )
+        down_payment_amount = purchase_price * (down_payment_percent / 100)
+        total_cash_invested = down_payment_amount + closing_costs_amount
+        cash_to_close = total_cash_invested
+        if total_cash_invested <= 0:
+            cash_on_cash_return = None
+        else:
+            annualized_cash = monthly_cashflow * 12
+            cash_on_cash_return = annualized_cash / total_cash_invested
+        scenario_label = (scenario.label or "").strip() or " / ".join(
+            filter(
+                None,
+                [
+                    f"{scenario.first_lien_percent:.0f}% first",
+                    f"{scenario.second_lien_percent:.0f}% second"
+                    if scenario.second_lien_percent
+                    else None,
+                    f"{down_payment_percent:.0f}% down" if down_payment_percent else None,
+                ],
+            )
+        ) or f"Scenario {index}"
+        loan_to_value = total_financed / purchase_price if purchase_price else None
+
         scenario_payload.append(
             ScenarioSummary(
-                term_years=scenario.term_years,
-                annual_interest_rate=scenario.annual_interest_rate,
+                label=scenario_label,
+                total_financed=total_financed,
+                down_payment_amount=down_payment_amount,
+                down_payment_percent=down_payment_percent,
                 monthly_payment=monthly_payment,
                 total_interest=total_interest_paid,
                 monthly_cashflow=monthly_cashflow,
+                cash_on_cash_return=cash_on_cash_return,
+                cash_to_close=cash_to_close,
                 loan_to_value=loan_to_value,
                 year_one_equity=year_one_equity,
                 five_year_equity=five_year_equity,
@@ -202,13 +511,14 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
                 cashflow_five_year=cashflow_five_year,
                 cashflow_ten_year=cashflow_ten_year,
                 cashflow_fifteen_year=cashflow_fifteen_year,
-                schedule=[PaymentResponse.from_payment(p) for p in schedule],
+                components=component_summaries,
+                schedule=[PaymentResponse.from_payment(p) for p in truncated_schedule],
             )
         )
 
     return CalculationResponse(
-        loan_amount=request.loan_amount,
-        property_value=property_value,
+        loan_amount=base_loan_amount,
+        property_value=purchase_price,
         monthly_rent=monthly_rent,
         monthly_operating_costs=monthly_costs,
         scenarios=scenario_payload,
