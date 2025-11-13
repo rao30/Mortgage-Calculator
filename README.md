@@ -80,6 +80,26 @@ Navigate to <http://127.0.0.1:8000> to open the interface. You can:
 - Inspect comparison tables alongside interactive payoff and payment composition charts.
 - Drill into the amortization schedule for each scenario with smooth chart updates.
 
+### Deploy to Railway
+
+This repo is ready for one-click deployment on [Railway](https://railway.app) using the
+included `Dockerfile`. Railway will build the container and run `uvicorn` for you.
+
+1. [Create a new Railway project](https://railway.app/dashboard).
+2. Choose **Deploy from GitHub repo** (or use the Railway CLI with `railway init` and `railway up`).
+3. Select this repository. Railway detects the Dockerfile automatically—no buildpacks needed.
+4. Once the deploy finishes, set the service URL as your frontend entry point.
+
+The container listens on port `8000` and Railway will automatically map `$PORT`. If you
+prefer a buildpack-style deploy instead, you can use the provided `Procfile`:
+
+```
+web: uvicorn webapp.app:app --host 0.0.0.0 --port ${PORT:-8000}
+```
+
+This makes it easy to promote the same codebase to managed hosting now, while leaving room
+to plug in authentication and persistence once a database service is added later.
+
 ### REST API
 
 The web server exposes a JSON endpoint at `POST /api/calculate`. Provide the loan amount,
