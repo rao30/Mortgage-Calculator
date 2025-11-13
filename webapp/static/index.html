@@ -22,10 +22,6 @@
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body class="min-h-screen bg-slate-950 text-slate-100">
-    <div class="absolute inset-0 overflow-hidden">
-      <div class="gradient-blur"></div>
-      <div class="gradient-blur second"></div>
-    </div>
     <div class="relative z-10">
       <header class="hero">
         <div class="hero__badge">Richard's Mortgage Calculator</div>
@@ -127,33 +123,6 @@
         </section>
 
         <section id="results" class="stack hidden">
-          <div class="grid gap-4 md:grid-cols-3" id="summaryCards"></div>
-
-          <section class="card accent">
-            <div class="insight-head">
-              <div>
-                <p class="eyebrow">Portfolio posture</p>
-                <h2>Cashflow vs equity outlook</h2>
-              </div>
-              <div id="ltvBadge" class="badge pill"></div>
-            </div>
-            <div class="insight-grid">
-              <div>
-                <p class="subtle">Property value</p>
-                <p id="propertyValueStat" class="stat"></p>
-              </div>
-              <div>
-                <p class="subtle">Monthly rent</p>
-                <p id="rentStat" class="stat"></p>
-              </div>
-              <div>
-                <p class="subtle">Operating costs</p>
-                <p id="costStat" class="stat"></p>
-              </div>
-            </div>
-            <p id="comparisonNarrative" class="narrative"></p>
-          </section>
-
           <div class="card">
             <div class="table-head">
               <div>
@@ -218,27 +187,6 @@
               </div>
               <div class="chart-frame">
                 <canvas id="compositionChart"></canvas>
-              </div>
-            </div>
-          </div>
-
-          <div class="grid gap-6 lg:grid-cols-2">
-            <div class="card">
-              <div class="card-head">
-                <h3>Cashflow power ranking</h3>
-                <p class="subtle">Net monthly cash after debt service and operating costs.</p>
-              </div>
-              <div class="chart-frame">
-                <canvas id="cashflowChart"></canvas>
-              </div>
-            </div>
-            <div class="card">
-              <div class="card-head">
-                <h3>Equity acceleration</h3>
-                <p class="subtle">Equity built in year 1, 5, and 10 for each structure.</p>
-              </div>
-              <div class="chart-frame">
-                <canvas id="equityChart"></canvas>
               </div>
             </div>
           </div>

@@ -4,30 +4,9 @@
 }
 
 body {
-  background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.15), transparent 45%),
-    radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.15), transparent 40%),
-    #010417;
+  background: #010417;
   color: #f8fafc;
   min-height: 100vh;
-}
-
-.gradient-blur {
-  position: absolute;
-  width: 40rem;
-  height: 40rem;
-  top: -15rem;
-  right: -10rem;
-  background: radial-gradient(circle, rgba(14, 165, 233, 0.45), transparent 60%);
-  filter: blur(120px);
-  opacity: 0.7;
-  pointer-events: none;
-}
-
-.gradient-blur.second {
-  top: auto;
-  bottom: -10rem;
-  left: -20rem;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.45), transparent 60%);
 }
 
 .shell {

@@ -1,15 +1,9 @@
 const scenariosContainer = document.getElementById('scenarios');
 const summaryTable = document.getElementById('summaryTable');
-const summaryCards = document.getElementById('summaryCards');
 const scheduleTable = document.getElementById('scheduleTable');
 const resultsSection = document.getElementById('results');
 const emptyState = document.getElementById('emptyState');
 const formError = document.getElementById('formError');
-const propertyValueStat = document.getElementById('propertyValueStat');
-const rentStat = document.getElementById('rentStat');
-const costStat = document.getElementById('costStat');
-const ltvBadge = document.getElementById('ltvBadge');
-const comparisonNarrative = document.getElementById('comparisonNarrative');
 const scenarioTabs = document.getElementById('scenarioTabs');
 const horizonTable = document.getElementById('horizonTable');
 
@@ -22,8 +16,6 @@ const defaultScenarios = [
 let mortgageData = null;
 let balanceChart = null;
 let compositionChart = null;
-let cashflowChart = null;
-let equityChart = null;
 let activeScenarioIndex = 0;
 
 const hoverAxisPlugin = {
@@ -62,13 +54,6 @@ function formatCurrency(value) {
 function formatSignedCurrency(value) {
   const formatted = currencyFormatter.format(Math.abs(value));
   return value >= 0 ? `+${formatted}` : `-${formatted}`;
-}
-
-function formatPercent(value) {
-  if (value === null || value === undefined || Number.isNaN(value)) {
-    return '—';
-  }
-  return `${(value * 100).toFixed(1)}%`;
 }
 
 function sampleSchedule(schedule, maxPoints = 720) {
@@ -121,49 +106,6 @@ function showError(message) {
   }
   formError.textContent = message;
   formError.classList.remove('hidden');
-}
-
-function buildSummaryCards(data) {
-  if (!data.scenarios.length) {
-    summaryCards.innerHTML = '';
-    return;
-  }
-
-  const byCashflow = [...data.scenarios].sort((a, b) => b.monthly_cashflow - a.monthly_cashflow);
-  const byEquity = [...data.scenarios].sort((a, b) => b.five_year_equity - a.five_year_equity);
-  const byEfficiency = [...data.scenarios].sort(
-    (a, b) => a.interest_to_equity_ratio - b.interest_to_equity_ratio,
-  );
-
-  const cards = [
-    {
-      title: 'Strongest monthly cashflow',
-      highlight: formatSignedCurrency(byCashflow[0].monthly_cashflow),
-      helper: `${byCashflow[0].term_years}-year @ ${byCashflow[0].annual_interest_rate.toFixed(2)}%`,
-    },
-    {
-      title: 'Fastest equity acceleration',
-      highlight: formatCurrency(byEquity[0].five_year_equity),
-      helper: `${byEquity[0].term_years}-year horizon`,
-    },
-    {
-      title: 'Best interest-to-equity ratio',
-      highlight: `${byEfficiency[0].interest_to_equity_ratio.toFixed(2)}x`,
-      helper: `${byEfficiency[0].term_years}-year payoff discipline`,
-    },
-  ];
-
-  summaryCards.innerHTML = cards
-    .map(
-      (card) => `
-        <article class="card tile">
-          <p class="eyebrow">${card.title}</p>
-          <p class="tile__value">${card.highlight}</p>
-          <p class="subtle">${card.helper}</p>
-        </article>
-      `,
-    )
-    .join('');
 }
 
 function buildSummaryTable(data) {
@@ -384,184 +326,13 @@ function updateScenarioDetails(index) {
   updateCompositionChart(scenario.schedule);
 }
 
-function updatePortfolioMeta(data) {
-  propertyValueStat.textContent = formatCurrency(data.property_value);
-  rentStat.textContent = formatCurrency(data.monthly_rent);
-  costStat.textContent = formatCurrency(data.monthly_operating_costs);
-
-  const ltv = data.scenarios[0]?.loan_to_value;
-  if (ltv !== undefined && ltv !== null) {
-    ltvBadge.textContent = `LTV ${formatPercent(ltv)}`;
-  } else {
-    ltvBadge.textContent = 'LTV unavailable';
-  }
-}
-
-function buildNarrative(data) {
-  if (!data.scenarios.length) return '';
-  const cashLeader = [...data.scenarios].sort(
-    (a, b) => b.monthly_cashflow - a.monthly_cashflow,
-  )[0];
-  const equityLeader = [...data.scenarios].sort((a, b) => b.ten_year_equity - a.ten_year_equity)[0];
-  const paymentLeader = [...data.scenarios].sort(
-    (a, b) => a.monthly_payment - b.monthly_payment,
-  )[0];
-
-  const spread =
-    Math.abs(cashLeader.monthly_cashflow - paymentLeader.monthly_cashflow) > 1
-      ? formatCurrency(
-          Math.abs(cashLeader.monthly_cashflow - paymentLeader.monthly_cashflow),
-        )
-      : '$0';
-
-  return `The ${cashLeader.term_years}-year @ ${cashLeader.annual_interest_rate.toFixed(
-    2,
-  )}% structure throws off ${formatSignedCurrency(
-    cashLeader.monthly_cashflow,
-  )} in monthly cash after expenses, while the ${equityLeader.term_years}-year option builds ${formatCurrency(
-    equityLeader.ten_year_equity,
-  )} in equity by year ten. Expect roughly ${spread} in cashflow spread between the most aggressive and most efficient payment structures.`;
-}
-
-function updateCashflowChart(data) {
-  const ctx = document.getElementById('cashflowChart').getContext('2d');
-  const labels = data.scenarios.map(
-    (scenario) => `${scenario.term_years} yr @ ${scenario.annual_interest_rate.toFixed(2)}%`,
-  );
-  const cashflows = data.scenarios.map((scenario) => scenario.monthly_cashflow);
-  const colors = cashflows.map((value) =>
-    value >= 0 ? 'rgba(94, 234, 212, 0.7)' : 'rgba(248, 113, 113, 0.7)',
-  );
-
-  if (cashflowChart) {
-    cashflowChart.destroy();
-  }
-
-  cashflowChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Net monthly cashflow',
-          data: cashflows,
-          backgroundColor: colors,
-          borderRadius: 10,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: {
-          ticks: { color: 'rgba(148, 163, 184, 0.9)' },
-          grid: { display: false },
-        },
-        y: {
-          ticks: {
-            color: 'rgba(148, 163, 184, 0.9)',
-            callback: (value) => formatSignedCurrency(value),
-          },
-          grid: { color: 'rgba(148, 163, 184, 0.08)' },
-        },
-      },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (context) => `Cashflow: ${formatSignedCurrency(context.parsed.y)}`,
-          },
-        },
-      },
-    },
-  });
-}
-
-function updateEquityChart(data) {
-  const ctx = document.getElementById('equityChart').getContext('2d');
-  const labels = data.scenarios.map(
-    (scenario) => `${scenario.term_years} yr @ ${scenario.annual_interest_rate.toFixed(2)}%`,
-  );
-
-  if (equityChart) {
-    equityChart.destroy();
-  }
-
-  equityChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Year 1',
-          data: data.scenarios.map((scenario) => scenario.year_one_equity),
-          backgroundColor: 'rgba(14, 165, 233, 0.85)',
-          borderRadius: 10,
-          stack: 'equity',
-        },
-        {
-          label: 'Year 5',
-          data: data.scenarios.map((scenario) => scenario.five_year_equity - scenario.year_one_equity),
-          backgroundColor: 'rgba(56, 189, 248, 0.85)',
-          borderRadius: 10,
-          stack: 'equity',
-        },
-        {
-          label: 'Year 10',
-          data: data.scenarios.map(
-            (scenario) => Math.max(scenario.ten_year_equity - scenario.five_year_equity, 0),
-          ),
-          backgroundColor: 'rgba(59, 130, 246, 0.85)',
-          borderRadius: 10,
-          stack: 'equity',
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: {
-          stacked: true,
-          ticks: { color: 'rgba(148, 163, 184, 0.9)' },
-          grid: { display: false },
-        },
-        y: {
-          stacked: true,
-          ticks: {
-            color: 'rgba(148, 163, 184, 0.9)',
-            callback: (value) => formatCurrency(value),
-          },
-          grid: { color: 'rgba(148, 163, 184, 0.08)' },
-        },
-      },
-      plugins: {
-        legend: {
-          labels: { color: 'rgba(148, 163, 184, 0.9)' },
-        },
-        tooltip: {
-          callbacks: {
-            label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
-          },
-        },
-      },
-    },
-  });
-}
-
 function renderResults(data) {
   mortgageData = data;
   activeScenarioIndex = 0;
-  buildSummaryCards(data);
   buildSummaryTable(data);
   buildScenarioTabs(data);
   buildHorizonTable(data);
-  updatePortfolioMeta(data);
   updateScenarioDetails(activeScenarioIndex);
-  comparisonNarrative.textContent = buildNarrative(data);
-  updateCashflowChart(data);
-  updateEquityChart(data);
   resultsSection.classList.remove('hidden');
   if (emptyState) {
     emptyState.classList.add('hidden');
