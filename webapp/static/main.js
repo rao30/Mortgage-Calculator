@@ -327,6 +327,15 @@ function applyExpenseInputs(expenses = {}) {
   });
 }
 
+function submitCalculatorForm() {
+  if (!calculatorForm) return;
+  if (typeof calculatorForm.requestSubmit === 'function') {
+    calculatorForm.requestSubmit();
+  } else {
+    calculatorForm.dispatchEvent(new Event('submit', { cancelable: true }));
+  }
+}
+
 function buildScenarioSnapshot() {
   return {
     version: 1,
@@ -399,13 +408,7 @@ function loadScenarioSnapshot(snapshot) {
   }
   hydrateScenarios(scenarios);
 
-  if (calculatorForm) {
-    if (typeof calculatorForm.requestSubmit === 'function') {
-      calculatorForm.requestSubmit();
-    } else {
-      calculatorForm.dispatchEvent(new Event('submit', { cancelable: true }));
-    }
-  }
+  submitCalculatorForm();
 }
 
 function showError(message) {
@@ -937,3 +940,5 @@ calculatorForm.addEventListener('submit', async (event) => {
     submitButton.textContent = 'Generate insights';
   }
 });
+
+submitCalculatorForm();
