@@ -94,7 +94,7 @@ The container listens on port `8000` and Railway will automatically map `$PORT`.
 prefer a buildpack-style deploy instead, you can use the provided `Procfile`:
 
 ```
-web: uvicorn webapp.app:app --host 0.0.0.0 --port ${PORT:-8000}
+web: uvicorn webapp.app:app --host 0.0.0.0 --port $PORT
 ```
 
 This makes it easy to promote the same codebase to managed hosting now, while leaving room
