@@ -482,6 +482,10 @@ body.drawer-open .drawer {
   gap: 1rem;
 }
 
+.scenario-card .card-head {
+  margin-bottom: 0.75rem;
+}
+
 .scenario-grid {
   display: flex;
   flex-direction: column;

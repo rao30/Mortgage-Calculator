@@ -49,7 +49,6 @@
               <p class="eyebrow">Deal inputs</p>
               <h2>Enter the core deal inputs used for every scenario.</h2>
             </div>
-            <button type="button" id="addScenario" class="btn ghost">Add scenario</button>
           </div>
           <form id="calculatorForm" class="form-grid">
             <div class="grid-two">
@@ -201,22 +200,11 @@
               </div>
             </section>
 
-            <div class="scenario-panel">
-              <div class="scenario-head">
-                <div>
-                  <p class="eyebrow">Mortgage scenarios</p>
-                  <p class="subtle">Compare as many term + rate pairs as you need.</p>
-                </div>
-              </div>
-              <div id="scenarios" class="scenario-grid"></div>
+          <div class="cta-row">
+            <div>
+              <p class="subtle">Includes payoff curves, amortization tables, and ROI-grade ratios.</p>
+              <p id="formError" class="text-sm text-rose-300 hidden"></p>
             </div>
-
-
-            <div class="cta-row">
-              <div>
-                <p class="subtle">Includes payoff curves, amortization tables, and ROI-grade ratios.</p>
-                <p id="formError" class="text-sm text-rose-300 hidden"></p>
-              </div>
               <div class="cta-actions">
                 <button type="button" id="loadScenario" class="btn ghost">Load scenario</button>
                 <button type="button" id="saveScenario" class="btn ghost">Save scenario</button>
@@ -225,6 +213,19 @@
             </div>
             <input id="scenarioFileInput" type="file" accept="application/json" class="hidden" />
           </form>
+        </section>
+
+        <section class="card scenario-card">
+          <div class="card-head scenario-head">
+            <div>
+              <p class="eyebrow">Mortgage scenarios</p>
+              <p class="subtle">Compare as many term + rate pairs as you need.</p>
+            </div>
+            <button type="button" id="addScenario" class="btn ghost">Add scenario</button>
+          </div>
+          <div class="scenario-panel">
+            <div id="scenarios" class="scenario-grid"></div>
+          </div>
         </section>
 
         <section id="results" class="stack hidden">
