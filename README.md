@@ -100,6 +100,19 @@ web: uvicorn webapp.app:app --host 0.0.0.0 --port $PORT
 This makes it easy to promote the same codebase to managed hosting now, while leaving room
 to plug in authentication and persistence once a database service is added later.
 
+### Running tests automatically
+
+Unit tests live under `tests/` and are powered by `pytest`. To make sure the suite runs every
+time you try to commit code, install [pre-commit](https://pre-commit.com/) once:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+From that point on, any commit will automatically execute `pytest`, blocking the commit if the
+suite fails. You can still run tests manually at any time with `pytest` or `python -m pytest`.
+
 ### REST API
 
 The web server exposes a JSON endpoint at `POST /api/calculate`. Provide the loan amount,

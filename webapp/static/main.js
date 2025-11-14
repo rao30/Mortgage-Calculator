@@ -178,13 +178,30 @@ function createScenarioRow(config = {}) {
     <div class="scenario-row__top">
       <label class="form-field scenario-row__label">
         <span class="form-label">Scenario label</span>
-        <input type="text" class="text-input" data-field="label" placeholder="Scenario ${
-          scenariosContainer.children.length + 1
-        }" />
+        <div class="scenario-row__label-input">
+          <input
+            type="text"
+            class="text-input"
+            data-field="label"
+            placeholder="Scenario ${scenariosContainer.children.length + 1}"
+          />
+        </div>
       </label>
       <div class="scenario-row__actions">
-        <button type="button" class="btn ghost duplicate-scenario">Duplicate</button>
-        <button type="button" class="btn ghost remove-scenario">Remove</button>
+        <button type="button" class="icon-button duplicate-scenario" aria-label="Duplicate scenario">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1Zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2Zm0 16H8V7h11v14Z"
+            />
+          </svg>
+        </button>
+        <button type="button" class="icon-button danger remove-scenario" aria-label="Remove scenario">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M9 3V4H4V6H5V20C5 21.105 5.895 22 7 22H17C18.105 22 19 21.105 19 20V6H20V4H15V3H9ZM7 6H17V20H7V6ZM9 8V18H11V8H9ZM13 8V18H15V8H13Z"
+            />
+          </svg>
+        </button>
       </div>
     </div>
     <div class="scenario-row__grid">
@@ -439,27 +456,27 @@ function buildSummaryTable(data) {
       const selectedClass = index === activeScenarioIndex ? 'selected' : '';
       return `
         <tr class="${selectedClass}">
-          <td>
+          <td class="structure-cell" data-label="Structure">
             <div class="structure-label">${escapeHtml(scenario.label)}</div>
             ${breakdown ? `<div class="structure-breakdown">${breakdown}</div>` : ''}
           </td>
-          <td>${formatCurrency(scenario.monthly_payment)}</td>
-          <td class="${scenario.monthly_cashflow >= 0 ? 'positive' : 'negative'}">
+          <td data-label="Monthly payment">${formatCurrency(scenario.monthly_payment)}</td>
+          <td data-label="Cashflow" class="${scenario.monthly_cashflow >= 0 ? 'positive' : 'negative'}">
             ${formatSignedCurrency(scenario.monthly_cashflow)}
           </td>
-          <td>${
+          <td data-label="Cash to close">${
             Number.isFinite(scenario.cash_to_close)
               ? formatCurrency(scenario.cash_to_close)
               : '—'
           }</td>
-          <td>${
+          <td data-label="Cash-on-cash">${
             scenario.cash_on_cash_return !== null
               ? formatPercent(scenario.cash_on_cash_return * 100, 1)
               : '—'
           }</td>
-          <td>${formatCurrency(scenario.year_one_equity)}</td>
-          <td>${formatCurrency(scenario.five_year_equity)}</td>
-          <td>${formatCurrency(scenario.total_interest)}</td>
+          <td data-label="Year 1 equity">${formatCurrency(scenario.year_one_equity)}</td>
+          <td data-label="5-year equity">${formatCurrency(scenario.five_year_equity)}</td>
+          <td data-label="Total interest">${formatCurrency(scenario.total_interest)}</td>
         </tr>
       `;
     })
