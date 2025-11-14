@@ -16,6 +16,11 @@ const scenarioFileInput = document.getElementById('scenarioFileInput');
 const resultsTabsNav = document.getElementById('resultsTabsNav');
 const insightsPane = document.getElementById('insightsPane');
 const amortizationPane = document.getElementById('amortizationPane');
+const navToggle = document.getElementById('navToggle');
+const loanAnalysisView = document.getElementById('loanAnalysisView');
+const otherToolsView = document.getElementById('otherToolsView');
+const drawerLinks = document.querySelectorAll('.drawer__link[data-view]');
+const appBarTitle = document.querySelector('.app-bar__title');
 
 const scenarioDefaults = {
   label: '',
@@ -895,6 +900,46 @@ if (loadScenarioButton && scenarioFileInput) {
     reader.readAsText(file);
   });
 }
+
+if (navToggle) {
+  navToggle.addEventListener('click', () => {
+    const drawerOpen = document.body.classList.toggle('drawer-open');
+    navToggle.setAttribute('aria-expanded', drawerOpen ? 'true' : 'false');
+  });
+}
+
+const viewTargets = {
+  loan: loanAnalysisView,
+  other: otherToolsView,
+};
+
+function setAppView(viewKey) {
+  Object.entries(viewTargets).forEach(([key, element]) => {
+    if (!element) return;
+    element.classList.toggle('hidden', key !== viewKey);
+  });
+  drawerLinks.forEach((link) => {
+    const isActive = link.dataset.view === viewKey;
+    link.classList.toggle('active', isActive);
+    if (isActive && appBarTitle) {
+      appBarTitle.textContent = link.textContent.trim();
+    }
+  });
+}
+
+drawerLinks.forEach((link) => {
+  link.addEventListener('click', () => {
+    const viewKey = link.dataset.view;
+    if (!viewKey) return;
+    setAppView(viewKey);
+    if (document.body.classList.contains('drawer-open')) {
+      document.body.classList.remove('drawer-open');
+      navToggle?.setAttribute('aria-expanded', 'false');
+    }
+  });
+});
+
+setAppView('loan');
 
 const calculatorForm = document.getElementById('calculatorForm');
 calculatorForm.addEventListener('submit', async (event) => {

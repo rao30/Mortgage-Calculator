@@ -22,9 +22,24 @@
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body class="min-h-screen bg-slate-950 text-slate-100">
+    <header class="app-bar">
+      <button
+        id="navToggle"
+        class="nav-toggle"
+        aria-label="Toggle navigation"
+        aria-expanded="false"
+      >
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div class="app-bar__title">Loan Analysis</div>
+    </header>
+
     <div class="relative z-10">
+      <div id="loanAnalysisView">
       <header class="hero">
-        <div class="hero__badge">Richard's Mortgage Calculator</div>
+      <div class="hero__badge">Richard's Mortgage Calculator</div>
       </header>
 
       <main class="shell">
@@ -312,8 +327,18 @@
             </div>
           </div>
         </section>
-
       </main>
+      </div>
+      <div id="otherToolsView" class="blank-view hidden">
+        <main class="shell"></main>
+      </div>
+      <nav class="drawer" aria-label="Navigation">
+        <div class="drawer__logo">Loan Analysis</div>
+        <div class="drawer__nav">
+          <button type="button" class="drawer__link active" data-view="loan">Loan Analysis</button>
+          <button type="button" class="drawer__link" data-view="other">Other tools</button>
+        </div>
+      </nav>
     </div>
     <script src="/static/main.js" type="module"></script>
   </body>
