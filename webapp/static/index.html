@@ -213,93 +213,102 @@
         </section>
 
         <section id="results" class="stack hidden">
-          <div class="card">
-            <div class="table-head">
-              <div>
-                <h2>Scenario ledger</h2>
-                <p class="subtle">Ranked by monthly payment, cashflow, and equity velocity.</p>
+          <div class="results-tabs" id="resultsTabsNav">
+            <button type="button" class="results-tab active" data-tab="insights">Insights</button>
+            <button type="button" class="results-tab" data-tab="amortization">Amortization</button>
+          </div>
+
+          <div id="insightsPane" class="results-pane">
+            <div class="card">
+              <div class="table-head">
+                <div>
+                  <h2>Scenario ledger</h2>
+                  <p class="subtle">Ranked by monthly payment, cashflow, and equity velocity.</p>
+                </div>
+                <div id="scenarioTabs" class="scenario-tabs"></div>
               </div>
-              <div id="scenarioTabs" class="scenario-tabs"></div>
+              <div class="overflow-x-auto">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Structure</th>
+                      <th>Monthly payment</th>
+                      <th>Cashflow</th>
+                      <th>Cash to close</th>
+                      <th>Cash-on-cash</th>
+                      <th>Year 1 equity</th>
+                      <th>5-year equity</th>
+                      <th>Total interest</th>
+                    </tr>
+                  </thead>
+                  <tbody id="summaryTable"></tbody>
+                </table>
+              </div>
             </div>
-            <div class="overflow-x-auto">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Structure</th>
-                    <th>Monthly payment</th>
-                    <th>Cashflow</th>
-                    <th>Cash to close</th>
-                    <th>Cash-on-cash</th>
-                    <th>Year 1 equity</th>
-                    <th>5-year equity</th>
-                    <th>Total interest</th>
-                  </tr>
-                </thead>
-                <tbody id="summaryTable"></tbody>
-              </table>
-            </div>
-          </div>
 
-          <div class="card">
-            <div class="card-head">
-              <h3>Horizon cashflow & equity</h3>
-              <p class="subtle">Net cash received, equity built, and combined value at 5, 10, and 15 years.</p>
-            </div>
-            <div class="overflow-x-auto">
-              <table class="data-table horizon">
-                <thead>
-                  <tr>
-                    <th>Scenario</th>
-                    <th>5-year outlook</th>
-                    <th>10-year outlook</th>
-                    <th>15-year outlook</th>
-                  </tr>
-                </thead>
-                <tbody id="horizonTable"></tbody>
-              </table>
-            </div>
-          </div>
-
-
-          <div class="grid gap-6 lg:grid-cols-2">
             <div class="card">
               <div class="card-head">
-                <h3>Balance payoff trajectory</h3>
-                <p class="subtle">Remaining balance vs. payment number for the selected scenario.</p>
+                <h3>Horizon cashflow &amp; equity</h3>
+                <p class="subtle">Net cash received, equity built, and combined value at 5, 10, and 15 years.</p>
               </div>
-              <div class="chart-frame">
-                <canvas id="balanceChart"></canvas>
+              <div class="overflow-x-auto">
+                <table class="data-table horizon">
+                  <thead>
+                    <tr>
+                      <th>Scenario</th>
+                      <th>5-year outlook</th>
+                      <th>10-year outlook</th>
+                      <th>15-year outlook</th>
+                    </tr>
+                  </thead>
+                  <tbody id="horizonTable"></tbody>
+                </table>
               </div>
             </div>
-            <div class="card">
-              <div class="card-head">
-                <h3>Principal vs. interest composition</h3>
-                <p class="subtle">How each payment splits between principal reduction and interest.</p>
+
+
+            <div class="grid gap-6 lg:grid-cols-2">
+              <div class="card">
+                <div class="card-head">
+                  <h3>Balance payoff trajectory</h3>
+                  <p class="subtle">Remaining balance vs. payment number for the selected scenario.</p>
+                </div>
+                <div class="chart-frame">
+                  <canvas id="balanceChart"></canvas>
+                </div>
               </div>
-              <div class="chart-frame">
-                <canvas id="compositionChart"></canvas>
+              <div class="card">
+                <div class="card-head">
+                  <h3>Principal vs. interest composition</h3>
+                  <p class="subtle">How each payment splits between principal reduction and interest.</p>
+                </div>
+                <div class="chart-frame">
+                  <canvas id="compositionChart"></canvas>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="card">
-            <div class="card-head">
-              <h3>Amortization schedule</h3>
-              <p class="subtle">Detailed payment breakdown for the selected scenario.</p>
-            </div>
-            <div class="overflow-x-auto max-h-[480px]">
-              <table class="data-table compact">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Payment</th>
-                    <th>Principal</th>
-                    <th>Interest</th>
-                    <th>Balance</th>
-                  </tr>
-                </thead>
-                <tbody id="scheduleTable"></tbody>
-              </table>
+          <div id="amortizationPane" class="results-pane hidden">
+            <div class="card">
+              <div class="card-head">
+                <h3>Amortization schedule</h3>
+                <p class="subtle">Detailed payment breakdown for the selected scenario.</p>
+              </div>
+              <div class="overflow-x-auto max-h-[480px]">
+                <table class="data-table compact">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Payment</th>
+                      <th>Principal</th>
+                      <th>Interest</th>
+                      <th>Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody id="scheduleTable"></tbody>
+                </table>
+              </div>
             </div>
           </div>
         </section>

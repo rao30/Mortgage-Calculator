@@ -381,6 +381,34 @@ body {
   }
 }
 
+.results-tabs {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-start;
+}
+
+.results-tab {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 9999px;
+  padding: 0.35rem 1rem;
+  background: rgba(15, 23, 42, 0.6);
+  color: rgba(226, 232, 240, 0.8);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  transition: background 0.2s ease, color 0.2s ease, border 0.2s ease;
+}
+
+.results-tab.active {
+  background: rgba(56, 189, 248, 0.18);
+  color: #e0f2fe;
+  border-color: rgba(56, 189, 248, 0.8);
+}
+
+.results-pane.hidden {
+  display: none;
+}
+
 .scenario-panel {
   display: flex;
   flex-direction: column;

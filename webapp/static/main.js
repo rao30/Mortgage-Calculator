@@ -13,6 +13,9 @@ const closingCostPrefix = document.getElementById('closingCostPrefix');
 const saveScenarioButton = document.getElementById('saveScenario');
 const loadScenarioButton = document.getElementById('loadScenario');
 const scenarioFileInput = document.getElementById('scenarioFileInput');
+const resultsTabsNav = document.getElementById('resultsTabsNav');
+const insightsPane = document.getElementById('insightsPane');
+const amortizationPane = document.getElementById('amortizationPane');
 
 const scenarioDefaults = {
   label: '',
@@ -92,6 +95,7 @@ let mortgageData = null;
 let balanceChart = null;
 let compositionChart = null;
 let activeScenarioIndex = 0;
+let activeResultsTab = 'insights';
 
 const hoverAxisPlugin = {
   id: 'hoverAxis',
@@ -353,6 +357,29 @@ function submitCalculatorForm() {
   }
 }
 
+const resultsPanes = {
+  insights: insightsPane,
+  amortization: amortizationPane,
+};
+
+function updateResultsTabUI() {
+  if (resultsTabsNav) {
+    resultsTabsNav.querySelectorAll('.results-tab').forEach((button) => {
+      button.classList.toggle('active', button.dataset.tab === activeResultsTab);
+    });
+  }
+  Object.entries(resultsPanes).forEach(([key, pane]) => {
+    if (!pane) return;
+    pane.classList.toggle('hidden', key !== activeResultsTab);
+  });
+}
+
+function setResultsView(tab) {
+  if (!resultsPanes[tab]) return;
+  activeResultsTab = tab;
+  updateResultsTabUI();
+}
+
 function buildScenarioSnapshot() {
   return {
     version: 1,
@@ -514,11 +541,11 @@ function buildScheduleTable(schedule) {
     .map(
       (payment) => `
         <tr>
-          <td class="px-4 py-2">${payment.payment_number}</td>
-          <td class="px-4 py-2">${formatCurrency(payment.payment)}</td>
-          <td class="px-4 py-2">${formatCurrency(payment.principal)}</td>
-          <td class="px-4 py-2">${formatCurrency(payment.interest)}</td>
-          <td class="px-4 py-2">${formatCurrency(payment.balance)}</td>
+          <td class="px-4 py-2" data-label="#">${payment.payment_number}</td>
+          <td class="px-4 py-2" data-label="Payment">${formatCurrency(payment.payment)}</td>
+          <td class="px-4 py-2" data-label="Principal">${formatCurrency(payment.principal)}</td>
+          <td class="px-4 py-2" data-label="Interest">${formatCurrency(payment.interest)}</td>
+          <td class="px-4 py-2" data-label="Balance">${formatCurrency(payment.balance)}</td>
         </tr>
       `,
     )
@@ -724,6 +751,7 @@ function renderResults(data) {
   buildScenarioTabs(data);
   buildHorizonTable(data);
   updateScenarioDetails(activeScenarioIndex);
+  updateResultsTabUI();
   resultsSection.classList.remove('hidden');
   if (emptyState) {
     emptyState.classList.add('hidden');
@@ -761,6 +789,14 @@ scenariosContainer.addEventListener('click', (event) => {
     createScenarioRow(config);
   }
 });
+
+if (resultsTabsNav) {
+  resultsTabsNav.addEventListener('click', (event) => {
+    const button = event.target.closest('.results-tab');
+    if (!button) return;
+    setResultsView(button.dataset.tab);
+  });
+}
 
 function hydrateDefaultScenarios() {
   scenariosContainer.innerHTML = '';
@@ -806,6 +842,8 @@ document.getElementById('monthlyRent').value = 5700;
 document.getElementById('addScenario').addEventListener('click', () => {
   createScenarioRow();
 });
+
+updateResultsTabUI();
 
 if (saveScenarioButton) {
   saveScenarioButton.addEventListener('click', () => {
