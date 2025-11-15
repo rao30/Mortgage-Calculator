@@ -6,6 +6,10 @@ const emptyState = document.getElementById('emptyState');
 const formError = document.getElementById('formError');
 const scenarioTabs = document.getElementById('scenarioTabs');
 const horizonTable = document.getElementById('horizonTable');
+const horizonHeaderRow = document.getElementById('horizonTableHeaders');
+const outlookChips = document.getElementById('outlookChips');
+const outlookYearInput = document.getElementById('outlookYearInput');
+const addOutlookButton = document.getElementById('addOutlook');
 const purchasePriceInput = document.getElementById('purchasePrice');
 const closingCostInput = document.getElementById('closingCostValue');
 const closingCostMode = document.getElementById('closingCostMode');
@@ -13,6 +17,10 @@ const closingCostPrefix = document.getElementById('closingCostPrefix');
 const saveScenarioButton = document.getElementById('saveScenario');
 const loadScenarioButton = document.getElementById('loadScenario');
 const scenarioFileInput = document.getElementById('scenarioFileInput');
+const closingCostToggleButtons = document.querySelectorAll('.closing-cost-toggle .toggle-option');
+const propertyAppreciationInput = document.getElementById('annualAppreciation');
+const rentIncreaseInput = document.getElementById('annualRentIncrease');
+const expenseInflationInput = document.getElementById('annualExpenseInflation');
 const resultsTabsNav = document.getElementById('resultsTabsNav');
 const insightsPane = document.getElementById('insightsPane');
 const amortizationPane = document.getElementById('amortizationPane');
@@ -21,6 +29,8 @@ const loanAnalysisView = document.getElementById('loanAnalysisView');
 const otherToolsView = document.getElementById('otherToolsView');
 const drawerLinks = document.querySelectorAll('.drawer__link[data-view]');
 const appBarTitle = document.querySelector('.app-bar__title');
+const baseOutlookYears = [1, 5];
+let selectedOutlookYears = [...baseOutlookYears];
 
 const scenarioDefaults = {
   label: '',
@@ -145,6 +155,17 @@ function updateClosingCostPrefix() {
   closingCostPrefix.textContent = closingCostMode.value === 'percent' ? '%' : '$';
 }
 
+function setClosingCostMode(mode) {
+  if (!closingCostMode) return;
+  const normalized = mode === 'fixed' ? 'fixed' : 'percent';
+  closingCostMode.value = normalized;
+  closingCostToggleButtons.forEach((button) => {
+    const buttonMode = button.dataset.mode;
+    button.classList.toggle('active', buttonMode === normalized);
+  });
+  updateClosingCostPrefix();
+}
+
 function escapeHtml(value) {
   if (value === undefined || value === null) {
     return '';
@@ -162,6 +183,43 @@ function formatPercent(value, digits = 1) {
     return '—';
   }
   return `${Number(value).toFixed(digits)}%`;
+}
+
+function normalizeOutlookYears(years) {
+  const inputs = Array.isArray(years) ? years : [];
+  const normalized = Array.from(
+    new Set(
+      [...inputs, ...baseOutlookYears]
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value) && value > 0),
+    ),
+  );
+  return normalized.sort((a, b) => a - b);
+}
+
+function renderOutlookChips() {
+  if (!outlookChips) return;
+  outlookChips.innerHTML = selectedOutlookYears
+    .map((year) => {
+      const isBase = baseOutlookYears.includes(year);
+      const label = isBase
+        ? `${year}-year outlook`
+        : `Remove ${year}-year outlook`;
+      return `
+        <button type="button" class="outlook-chip ${
+          isBase ? 'static' : 'removable'
+        }" data-year="${year}" aria-label="${label}">
+          <span>${year}yr</span>
+          ${isBase ? '' : '<span class="remove-icon" aria-hidden="true">&times;</span>'}
+        </button>
+      `;
+    })
+    .join('');
+}
+
+function setSelectedOutlookYears(years) {
+  selectedOutlookYears = normalizeOutlookYears(years);
+  renderOutlookChips();
 }
 
 function sampleSchedule(schedule, maxPoints = 720) {
@@ -353,6 +411,35 @@ function applyExpenseInputs(expenses = {}) {
   });
 }
 
+function readPercentInput(input) {
+  if (!input) return 0;
+  const value = parseFloat(input.value);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function readFutureAssumptions() {
+  return {
+    annual_property_appreciation_percent: readPercentInput(propertyAppreciationInput),
+    annual_rent_growth_percent: readPercentInput(rentIncreaseInput),
+    annual_expense_inflation_percent: readPercentInput(expenseInflationInput),
+  };
+}
+
+function applyFutureAssumptions(assumptions = {}) {
+  const setInputValue = (input, value) => {
+    if (!input) return;
+    if (value === undefined || value === null) {
+      input.value = '';
+      return;
+    }
+    input.value = value;
+  };
+
+  setInputValue(propertyAppreciationInput, assumptions.annual_property_appreciation_percent);
+  setInputValue(rentIncreaseInput, assumptions.annual_rent_growth_percent);
+  setInputValue(expenseInflationInput, assumptions.annual_expense_inflation_percent);
+}
+
 function submitCalculatorForm() {
   if (!calculatorForm) return;
   if (typeof calculatorForm.requestSubmit === 'function') {
@@ -400,6 +487,7 @@ function buildScenarioSnapshot() {
         ? Number(document.getElementById('scheduleLimit').value)
         : null,
       expenses: readExpenseInputs(),
+      future_assumptions: readFutureAssumptions(),
     },
     scenarios: readScenarios(),
   };
@@ -455,6 +543,9 @@ function loadScenarioSnapshot(snapshot) {
   if (inputs.expenses) {
     applyExpenseInputs(inputs.expenses);
   }
+  if (inputs.future_assumptions) {
+    applyFutureAssumptions(inputs.future_assumptions);
+  }
   hydrateScenarios(scenarios);
 
   submitCalculatorForm();
@@ -506,8 +597,6 @@ function buildSummaryTable(data) {
               ? formatPercent(scenario.cash_on_cash_return * 100, 1)
               : '—'
           }</td>
-          <td data-label="Year 1 equity">${formatCurrency(scenario.year_one_equity)}</td>
-          <td data-label="5-year equity">${formatCurrency(scenario.five_year_equity)}</td>
           <td data-label="Total interest">${formatCurrency(scenario.total_interest)}</td>
         </tr>
       `;
@@ -557,50 +646,78 @@ function buildScheduleTable(schedule) {
     .join('');
 }
 
-function buildHorizonTable(data) {
+function buildHorizonTable(data, outlookYears) {
   if (!horizonTable) return;
-  horizonTable.innerHTML = data.scenarios
-    .map(
-      (scenario) => {
-        const components = scenario.components ?? [];
-        const breakdown = components
-          .map(
-            (component) => `
-              <span>
-                ${escapeHtml(component.label)}: ${formatPercent(component.share_percent, 0)}
-                • ${component.term_years}yr @ ${component.annual_interest_rate.toFixed(2)}%
-              </span>
-            `,
-          )
-          .join('<br />');
-        const renderCell = (cash, equity) => {
-          const total = cash + equity;
-          const cashClass = cash >= 0 ? 'positive' : 'negative';
-          return `
-            <div class="horizon-block">
-              <span class="label">Cash</span>
-              <span class="value ${cashClass}">${formatSignedCurrency(cash)}</span>
-              <span class="label">Equity</span>
-              <span class="value">${formatCurrency(equity)}</span>
-              <span class="label">Total</span>
-              <span class="value total">${formatCurrency(total)}</span>
-            </div>
-          `;
-        };
+  const headers =
+    Array.isArray(outlookYears) && outlookYears.length ? outlookYears : baseOutlookYears;
 
+  if (horizonHeaderRow) {
+    const columnHeaders = headers
+      .map((year) => `<th>${year}-yr outlook</th>`)
+      .join('');
+    horizonHeaderRow.innerHTML = `<th>Scenario</th>${columnHeaders}`;
+  }
+
+  horizonTable.innerHTML = data.scenarios
+    .map((scenario) => {
+      const components = scenario.components ?? [];
+      const breakdown = components
+        .map(
+          (component) => `
+            <span>
+              ${escapeHtml(component.label)}: ${formatPercent(component.share_percent, 0)}
+              • ${component.term_years}yr @ ${component.annual_interest_rate.toFixed(2)}%
+            </span>
+          `,
+        )
+        .join('<br />');
+      const lookups = new Map(
+        (scenario.horizon_outlooks ?? []).map((outlook) => [outlook.horizon_years, outlook]),
+      );
+      const renderCell = (cash, loanPayoff, appreciationEquity, downPayment, totalEquity) => {
+        const cashClass = cash >= 0 ? 'positive' : 'negative';
         return `
+          <div class="horizon-block">
+            <span class="label">Cash</span>
+            <span class="value ${cashClass}">${formatSignedCurrency(cash)}</span>
+            <span class="label">Loan payoff</span>
+            <span class="value positive">${formatCurrency(loanPayoff)}</span>
+            <span class="label">Appreciation + down payment</span>
+            <span class="value">${formatCurrency(appreciationEquity)}</span>
+            <span class="label">Down payment</span>
+            <span class="value">${formatCurrency(downPayment)}</span>
+            <span class="label">Total equity</span>
+            <span class="value total">${formatCurrency(totalEquity)}</span>
+          </div>
+        `;
+      };
+
+      const cells = headers
+        .map((year) => {
+          const outlook = lookups.get(year);
+          if (!outlook) {
+            return `<td data-label="${year}-yr outlook">—</td>`;
+          }
+          return `<td data-label="${year}-yr outlook">${renderCell(
+            outlook.cashflow,
+            outlook.loan_payoff,
+            outlook.appreciation_equity,
+            scenario.down_payment_amount,
+            outlook.equity,
+          )}</td>`;
+        })
+        .join('');
+
+      return `
         <tr>
           <td>
             <div class="structure-label">${escapeHtml(scenario.label)}</div>
             ${breakdown ? `<div class="structure-breakdown">${breakdown}</div>` : ''}
           </td>
-          <td>${renderCell(scenario.cashflow_five_year, scenario.five_year_equity)}</td>
-          <td>${renderCell(scenario.cashflow_ten_year, scenario.ten_year_equity)}</td>
-          <td>${renderCell(scenario.cashflow_fifteen_year, scenario.fifteen_year_equity)}</td>
+          ${cells}
         </tr>
       `;
-      },
-    )
+    })
     .join('');
 }
 
@@ -754,7 +871,7 @@ function renderResults(data) {
   activeScenarioIndex = 0;
   buildSummaryTable(data);
   buildScenarioTabs(data);
-  buildHorizonTable(data);
+  buildHorizonTable(data, selectedOutlookYears);
   updateScenarioDetails(activeScenarioIndex);
   updateResultsTabUI();
   resultsSection.classList.remove('hidden');
@@ -770,6 +887,45 @@ if (scenarioTabs) {
     activeScenarioIndex = Number(tab.dataset.index);
     buildScenarioTabs(mortgageData);
     updateScenarioDetails(activeScenarioIndex);
+  });
+}
+
+if (outlookChips) {
+  outlookChips.addEventListener('click', (event) => {
+    const chip = event.target.closest('.outlook-chip');
+    if (!chip) return;
+    const year = Number(chip.dataset.year);
+    if (!year || baseOutlookYears.includes(year)) {
+      return;
+    }
+    const nextYears = selectedOutlookYears.filter((value) => value !== year);
+    setSelectedOutlookYears(nextYears);
+    submitCalculatorForm();
+  });
+}
+
+if (addOutlookButton) {
+  addOutlookButton.addEventListener('click', () => {
+    if (!outlookYearInput) return;
+    const year = parseInt(outlookYearInput.value, 10);
+    outlookYearInput.value = '';
+    if (!Number.isFinite(year) || year <= 0) {
+      return;
+    }
+    if (selectedOutlookYears.includes(year)) {
+      return;
+    }
+    setSelectedOutlookYears([...selectedOutlookYears, year]);
+    submitCalculatorForm();
+  });
+}
+
+if (outlookYearInput) {
+  outlookYearInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      addOutlookButton?.click();
+    }
   });
 }
 
@@ -817,11 +973,17 @@ if (purchasePriceInput) {
 if (closingCostInput) {
   closingCostInput.value = 3;
 }
+closingCostToggleButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    const mode = button.dataset.mode;
+    if (!mode) return;
+    setClosingCostMode(mode);
+  });
+});
+
 if (closingCostMode) {
-  closingCostMode.value = 'percent';
-  closingCostMode.addEventListener('change', updateClosingCostPrefix);
+  setClosingCostMode('percent');
 }
-updateClosingCostPrefix();
 [
   'propertyTaxes',
   'insurance',
@@ -843,6 +1005,15 @@ updateClosingCostPrefix();
   }
 });
 document.getElementById('monthlyRent').value = 5700;
+if (propertyAppreciationInput) {
+  propertyAppreciationInput.value = 0;
+}
+if (rentIncreaseInput) {
+  rentIncreaseInput.value = 0;
+}
+if (expenseInflationInput) {
+  expenseInflationInput.value = 0;
+}
 
 document.getElementById('addScenario').addEventListener('click', () => {
   createScenarioRow();
@@ -939,6 +1110,7 @@ drawerLinks.forEach((link) => {
   });
 });
 
+setSelectedOutlookYears(selectedOutlookYears);
 setAppView('loan');
 
 const calculatorForm = document.getElementById('calculatorForm');
@@ -956,10 +1128,10 @@ calculatorForm.addEventListener('submit', async (event) => {
     const closingCostValue =
       closingCostInput && closingCostInput.value ? parseFloat(closingCostInput.value) : 0;
     const closingCostModeValue = closingCostMode ? closingCostMode.value : 'percent';
-    const scheduleLimitInput = document.getElementById('scheduleLimit').value;
-    const scheduleLimit = scheduleLimitInput ? parseInt(scheduleLimitInput, 10) : null;
     const monthlyRentInput = document.getElementById('monthlyRent').value;
     const monthlyRent = monthlyRentInput ? parseFloat(monthlyRentInput) : 0;
+    const scheduleLimitInput = document.getElementById('scheduleLimit').value;
+    const scheduleLimit = scheduleLimitInput ? parseInt(scheduleLimitInput, 10) : null;
     const scenarios = readScenarios();
 
     if (!Number.isFinite(purchasePrice) || purchasePrice <= 0) {
@@ -1020,6 +1192,8 @@ calculatorForm.addEventListener('submit', async (event) => {
         monthly_rent: monthlyRent,
         schedule_limit: scheduleLimit,
         expenses: readExpenseInputs(),
+        future_assumptions: readFutureAssumptions(),
+        outlook_years: selectedOutlookYears,
         scenarios,
       }),
     });

@@ -5,6 +5,7 @@ import pytest
 from webapp import app
 from webapp.app import (
     ExpenseInputs,
+    FutureAssumptions,
     ScenarioInput,
     CalculationRequest,
     _equity_built,
@@ -165,3 +166,82 @@ def test_calculate_mortgage_with_expenses():
     assert len(stacked.components) == 2
     assert stacked.components[0].label == "First lien"
     assert stacked.components[1].label == "Second lien"
+
+
+def test_custom_outlook_years_returned():
+    request = CalculationRequest(
+        purchase_price=400_000,
+        closing_costs_value=3,
+        closing_costs_mode="percent",
+        monthly_rent=0,
+        expenses=ExpenseInputs(),
+        scenarios=[
+            ScenarioInput(
+                label="Base scenario",
+                first_term_years=30,
+                first_annual_interest_rate=6.25,
+                first_lien_percent=80,
+            )
+        ],
+        outlook_years=[1, 5, 8],
+    )
+
+    response = calculate_mortgage(request)
+    outlooks = response.scenarios[0].horizon_outlooks
+    horizon_years = [outlook.horizon_years for outlook in outlooks]
+    assert horizon_years == [1, 5, 8]
+    assert outlooks[0].equity == pytest.approx(response.scenarios[0].year_one_equity)
+    assert outlooks[1].equity == pytest.approx(response.scenarios[0].five_year_equity)
+
+
+def test_future_assumptions_reflected_in_response():
+    assumptions = FutureAssumptions(
+        annual_property_appreciation_percent=3.0,
+        annual_rent_growth_percent=2.0,
+        annual_expense_inflation_percent=1.5,
+    )
+    request = CalculationRequest(
+        purchase_price=450_000,
+        closing_costs_value=3,
+        closing_costs_mode="percent",
+        monthly_rent=4000,
+        expenses=ExpenseInputs(),
+        scenarios=[
+            ScenarioInput(
+                label="Base scenario",
+                first_term_years=30,
+                first_annual_interest_rate=6.5,
+                first_lien_percent=80,
+            )
+        ],
+        future_assumptions=assumptions,
+    )
+    response = calculate_mortgage(request)
+    assert response.future_assumptions == assumptions
+
+
+def test_property_appreciation_boosts_year_one_equity():
+    def build_request(assumptions: FutureAssumptions) -> CalculationRequest:
+        return CalculationRequest(
+            purchase_price=400_000,
+            closing_costs_value=3,
+            closing_costs_mode="percent",
+            monthly_rent=3500,
+            expenses=ExpenseInputs(),
+            scenarios=[
+                ScenarioInput(
+                    first_term_years=30,
+                    first_annual_interest_rate=6.25,
+                    first_lien_percent=80,
+                )
+            ],
+            future_assumptions=assumptions,
+        )
+
+    baseline = build_request(FutureAssumptions())
+    elevated = build_request(FutureAssumptions(annual_property_appreciation_percent=5.0))
+    base_response = calculate_mortgage(baseline)
+    elevated_response = calculate_mortgage(elevated)
+    base_equity = base_response.scenarios[0].year_one_equity
+    elevated_equity = elevated_response.scenarios[0].year_one_equity
+    assert elevated_equity > base_equity

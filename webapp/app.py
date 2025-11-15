@@ -68,6 +68,9 @@ def _merge_component_schedules(
     return merged
 
 
+DEFAULT_HORIZON_YEARS = (1, 5, 10, 15)
+
+
 
 class ScenarioInput(BaseModel):
     label: str | None = Field(
@@ -146,6 +149,14 @@ class CalculationRequest(BaseModel):
         default=None,
         description="Detailed expense inputs used to derive operating costs.",
     )
+    future_assumptions: FutureAssumptions = Field(
+        default_factory=lambda: FutureAssumptions(),
+        description="Annual growth assumptions applied to rent, expenses, and property value.",
+    )
+    outlook_years: Sequence[int] = Field(
+        default_factory=lambda: list(DEFAULT_HORIZON_YEARS),
+        description="List of years to build horizon snapshots for each scenario.",
+    )
     scenarios: List[ScenarioInput] | None = Field(
         default=None,
         description="List of mortgage scenarios. Defaults are used if omitted.",
@@ -161,6 +172,26 @@ class CalculationRequest(BaseModel):
         if value is not None and value > 1200:
             raise ValueError("Schedule limit cannot exceed 1200 rows")
         return value
+
+    @validator("outlook_years", pre=True, always=True)
+    def _validate_outlook_years(cls, value: Sequence[int] | None) -> Sequence[int]:
+        source = value or DEFAULT_HORIZON_YEARS
+        normalized: list[int] = []
+        seen: set[int] = set()
+        for entry in source:
+            try:
+                year = int(entry)
+            except (TypeError, ValueError):
+                raise ValueError("Each outlook year must be a positive integer.")
+            if year <= 0:
+                raise ValueError("Outlook years must be positive.")
+            if year in seen:
+                continue
+            seen.add(year)
+            normalized.append(year)
+        if not normalized:
+            normalized = list(DEFAULT_HORIZON_YEARS)
+        return normalized
 
 
 class PaymentResponse(BaseModel):
@@ -250,7 +281,11 @@ class ExpenseInputs(BaseModel):
         return value
 
     def monthly_operating_costs(self, monthly_rent: float) -> float:
-        fixed_monthly = (
+        return self.fixed_monthly_costs() + monthly_rent * self.percent_factor()
+
+    def fixed_monthly_costs(self) -> float:
+        """Return the fixed monthly costs that do not vary with rent."""
+        return (
             (self.property_taxes_annual / 12.0)
             + (self.insurance_annual / 12.0)
             + self.electricity_monthly
@@ -260,14 +295,41 @@ class ExpenseInputs(BaseModel):
             + self.garbage_monthly
             + self.other_monthly
         )
-        percent_factor = (
+
+    def percent_factor(self) -> float:
+        """Return the cumulative percentage-based expense factor applied to rent."""
+        return (
             self.repairs_percent
             + self.capex_percent
             + self.vacancy_percent
             + self.management_percent
         ) / 100.0
-        variable_monthly = monthly_rent * percent_factor
-        return fixed_monthly + variable_monthly
+
+
+class FutureAssumptions(BaseModel):
+    annual_property_appreciation_percent: float = Field(
+        default=0.0,
+        ge=0,
+        description="Annual property appreciation percentage.",
+    )
+    annual_rent_growth_percent: float = Field(
+        default=0.0,
+        ge=0,
+        description="Annual rent growth assumption as a percentage.",
+    )
+    annual_expense_inflation_percent: float = Field(
+        default=0.0,
+        ge=0,
+        description="Annual expense inflation percentage applied to fixed costs.",
+    )
+
+
+class ScenarioHorizonOutlook(BaseModel):
+    horizon_years: int
+    cashflow: float
+    equity: float
+    loan_payoff: float
+    appreciation_equity: float
 
 
 class ScenarioSummary(BaseModel):
@@ -285,10 +347,19 @@ class ScenarioSummary(BaseModel):
     five_year_equity: float
     ten_year_equity: float
     fifteen_year_equity: float
+    loan_payoff_year_one: float
+    loan_payoff_five_year: float
+    loan_payoff_ten_year: float
+    loan_payoff_fifteen_year: float
+    appreciation_equity_year_one: float
+    appreciation_equity_five_year: float
+    appreciation_equity_ten_year: float
+    appreciation_equity_fifteen_year: float
     interest_to_equity_ratio: float
     cashflow_five_year: float
     cashflow_ten_year: float
     cashflow_fifteen_year: float
+    horizon_outlooks: Sequence[ScenarioHorizonOutlook]
     components: Sequence["LoanComponentSummary"]
     schedule: Sequence[PaymentResponse]
 
@@ -313,6 +384,7 @@ class CalculationResponse(BaseModel):
     monthly_rent: float
     monthly_operating_costs: float
     scenarios: Sequence[ScenarioSummary]
+    future_assumptions: FutureAssumptions
 
 
 app = FastAPI(title="Mortgage Comparison Tool", version="1.0.0")
@@ -341,10 +413,20 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
         closing_costs_amount = request.closing_costs_value
     closing_costs_amount = max(0.0, closing_costs_amount)
     monthly_rent = request.monthly_rent
+    assumptions = request.future_assumptions or FutureAssumptions()
+    rent_growth_rate = assumptions.annual_rent_growth_percent / 100.0
+    appreciation_rate = assumptions.annual_property_appreciation_percent / 100.0
+    expense_inflation_rate = assumptions.annual_expense_inflation_percent / 100.0
+
     if request.expenses is not None:
-        monthly_costs = request.expenses.monthly_operating_costs(monthly_rent)
+        expense_inputs = request.expenses
+        base_fixed_costs = expense_inputs.fixed_monthly_costs()
+        variable_expense_factor = expense_inputs.percent_factor()
+        monthly_operating_costs = expense_inputs.monthly_operating_costs(monthly_rent)
     else:
-        monthly_costs = request.monthly_operating_costs
+        base_fixed_costs = request.monthly_operating_costs
+        variable_expense_factor = 0.0
+        monthly_operating_costs = request.monthly_operating_costs
 
     default_structures = [
         ScenarioInput(
@@ -385,6 +467,7 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
 
     scenario_inputs = request.scenarios or default_structures
     scenario_payload: list[ScenarioSummary] = []
+    horizon_years = list(request.outlook_years)
 
     for index, scenario in enumerate(scenario_inputs, start=1):
         first_amount = purchase_price * (scenario.first_lien_percent / 100)
@@ -452,20 +535,94 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
         monthly_payment = blended_schedule[0].payment if blended_schedule else 0.0
         total_interest_paid = sum(total_interest(s) for s in component_schedules)
 
-        year_one_equity = _equity_built(blended_schedule, 12)
-        five_year_equity = _equity_built(blended_schedule, 60)
-        ten_year_equity = _equity_built(blended_schedule, 120)
-        fifteen_year_equity = _equity_built(blended_schedule, 180)
-        total_equity = _equity_built(blended_schedule, len(blended_schedule))
-        monthly_cashflow = monthly_rent - monthly_costs - monthly_payment
-        cashflow_five_year = _net_cashflow(blended_schedule, monthly_rent, monthly_costs, 60)
-        cashflow_ten_year = _net_cashflow(blended_schedule, monthly_rent, monthly_costs, 120)
-        cashflow_fifteen_year = _net_cashflow(
-            blended_schedule, monthly_rent, monthly_costs, 180
-        )
+        def rent_for_month(payment_number: int) -> float:
+            year = (payment_number - 1) // 12
+            return monthly_rent * ((1 + rent_growth_rate) ** year)
+
+        def cost_for_month(payment_number: int) -> float:
+            year = (payment_number - 1) // 12
+            fixed = base_fixed_costs * ((1 + expense_inflation_rate) ** year)
+            return fixed + rent_for_month(payment_number) * variable_expense_factor
+
+        def net_cash_for_month(payment_index: int) -> float:
+            payment = blended_schedule[payment_index]
+            payment_number = payment_index + 1
+            return rent_for_month(payment_number) - cost_for_month(payment_number) - payment.payment
+
+        def sum_cashflows(months: int) -> float:
+            total = 0.0
+            limit = min(len(blended_schedule), months)
+            for idx in range(limit):
+                total += net_cash_for_month(idx)
+            return total
+
+        def balance_after_months(months: int) -> float:
+            if not blended_schedule or months <= 0:
+                return total_financed
+            idx = min(len(blended_schedule), months) - 1
+            return blended_schedule[idx].balance
+
+        def property_value_after_months(months: int) -> float:
+            years = max(months // 12, 0)
+            return purchase_price * ((1 + appreciation_rate) ** years)
+
+        def equity_after_months(months: int) -> float:
+            return max(property_value_after_months(months) - balance_after_months(months), 0.0)
+
+        def loan_payoff_after_months(months: int) -> float:
+            balance = balance_after_months(months)
+            payoff = total_financed - balance
+            return max(payoff, 0.0)
+
+        def appreciation_equity_after_months(months: int) -> float:
+            return max(property_value_after_months(months) - total_financed, 0.0)
+
+        monthly_cashflow = net_cash_for_month(0) if blended_schedule else 0.0
+
+        snapshot_cache: dict[int, dict[str, float]] = {}
+
+        def snapshot_for_months(months: int) -> dict[str, float]:
+            key = max(1, months)
+            if key not in snapshot_cache:
+                snapshot_cache[key] = {
+                    "cashflow": sum_cashflows(key),
+                    "equity": equity_after_months(key),
+                    "loan_payoff": loan_payoff_after_months(key),
+                    "appreciation_equity": appreciation_equity_after_months(key),
+                }
+            return snapshot_cache[key]
+
+        def snapshot_for_years(years: int) -> dict[str, float]:
+            return snapshot_for_months(years * 12)
+
+        year_one_snapshot = snapshot_for_years(1)
+        five_year_snapshot = snapshot_for_years(5)
+        ten_year_snapshot = snapshot_for_years(10)
+        fifteen_year_snapshot = snapshot_for_years(15)
+
+        year_one_equity = year_one_snapshot["equity"]
+        five_year_equity = five_year_snapshot["equity"]
+        ten_year_equity = ten_year_snapshot["equity"]
+        fifteen_year_equity = fifteen_year_snapshot["equity"]
+
+        five_year_cashflow = five_year_snapshot["cashflow"]
+        ten_year_cashflow = ten_year_snapshot["cashflow"]
+        fifteen_year_cashflow = fifteen_year_snapshot["cashflow"]
+        total_months = len(blended_schedule)
+        total_equity = equity_after_months(total_months) if total_months else 0.0
         interest_to_equity_ratio = (
             total_interest_paid / total_equity if total_equity else float("inf")
         )
+
+        loan_payoff_year_one = year_one_snapshot["loan_payoff"]
+        loan_payoff_five_year = five_year_snapshot["loan_payoff"]
+        loan_payoff_ten_year = ten_year_snapshot["loan_payoff"]
+        loan_payoff_fifteen_year = fifteen_year_snapshot["loan_payoff"]
+
+        appreciation_equity_year_one = year_one_snapshot["appreciation_equity"]
+        appreciation_equity_five_year = five_year_snapshot["appreciation_equity"]
+        appreciation_equity_ten_year = ten_year_snapshot["appreciation_equity"]
+        appreciation_equity_fifteen_year = fifteen_year_snapshot["appreciation_equity"]
         down_payment_percent = max(
             0.0, 100.0 - scenario.first_lien_percent - scenario.second_lien_percent
         )
@@ -491,6 +648,17 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
         ) or f"Scenario {index}"
         loan_to_value = total_financed / purchase_price if purchase_price else None
 
+        horizon_outlooks = [
+            ScenarioHorizonOutlook(
+                horizon_years=year,
+                cashflow=snapshot_for_years(year)["cashflow"],
+                equity=snapshot_for_years(year)["equity"],
+                loan_payoff=snapshot_for_years(year)["loan_payoff"],
+                appreciation_equity=snapshot_for_years(year)["appreciation_equity"],
+            )
+            for year in horizon_years
+        ]
+
         scenario_payload.append(
             ScenarioSummary(
                 label=scenario_label,
@@ -508,9 +676,18 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
                 ten_year_equity=ten_year_equity,
                 fifteen_year_equity=fifteen_year_equity,
                 interest_to_equity_ratio=interest_to_equity_ratio,
-                cashflow_five_year=cashflow_five_year,
-                cashflow_ten_year=cashflow_ten_year,
-                cashflow_fifteen_year=cashflow_fifteen_year,
+                cashflow_five_year=five_year_cashflow,
+                cashflow_ten_year=ten_year_cashflow,
+                cashflow_fifteen_year=fifteen_year_cashflow,
+                loan_payoff_year_one=loan_payoff_year_one,
+                loan_payoff_five_year=loan_payoff_five_year,
+                loan_payoff_ten_year=loan_payoff_ten_year,
+                loan_payoff_fifteen_year=loan_payoff_fifteen_year,
+                appreciation_equity_year_one=appreciation_equity_year_one,
+                appreciation_equity_five_year=appreciation_equity_five_year,
+                appreciation_equity_ten_year=appreciation_equity_ten_year,
+                appreciation_equity_fifteen_year=appreciation_equity_fifteen_year,
+                horizon_outlooks=horizon_outlooks,
                 components=component_summaries,
                 schedule=[PaymentResponse.from_payment(p) for p in truncated_schedule],
             )
@@ -520,6 +697,7 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
         loan_amount=base_loan_amount,
         property_value=purchase_price,
         monthly_rent=monthly_rent,
-        monthly_operating_costs=monthly_costs,
+        monthly_operating_costs=monthly_operating_costs,
         scenarios=scenario_payload,
+        future_assumptions=assumptions,
     )
