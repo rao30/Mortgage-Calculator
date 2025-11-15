@@ -11,6 +11,7 @@ const outlookChips = document.getElementById('outlookChips');
 const outlookYearInput = document.getElementById('outlookYearInput');
 const addOutlookButton = document.getElementById('addOutlook');
 const purchasePriceInput = document.getElementById('purchasePrice');
+const propertyValueInput = document.getElementById('propertyValue');
 const closingCostInput = document.getElementById('closingCostValue');
 const closingCostMode = document.getElementById('closingCostMode');
 const closingCostPrefix = document.getElementById('closingCostPrefix');
@@ -29,8 +30,8 @@ const loanAnalysisView = document.getElementById('loanAnalysisView');
 const otherToolsView = document.getElementById('otherToolsView');
 const drawerLinks = document.querySelectorAll('.drawer__link[data-view]');
 const appBarTitle = document.querySelector('.app-bar__title');
-const baseOutlookYears = [1, 5];
-let selectedOutlookYears = [...baseOutlookYears];
+const defaultOutlookYears = [1, 5];
+let selectedOutlookYears = [...defaultOutlookYears];
 
 const scenarioDefaults = {
   label: '',
@@ -188,29 +189,19 @@ function formatPercent(value, digits = 1) {
 function normalizeOutlookYears(years) {
   const inputs = Array.isArray(years) ? years : [];
   const normalized = Array.from(
-    new Set(
-      [...inputs, ...baseOutlookYears]
-        .map((value) => Number(value))
-        .filter((value) => Number.isFinite(value) && value > 0),
-    ),
-  );
-  return normalized.sort((a, b) => a - b);
+    new Set(inputs.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0)),
+  ).sort((a, b) => a - b);
+  return normalized.length ? normalized : [...defaultOutlookYears];
 }
 
 function renderOutlookChips() {
   if (!outlookChips) return;
   outlookChips.innerHTML = selectedOutlookYears
     .map((year) => {
-      const isBase = baseOutlookYears.includes(year);
-      const label = isBase
-        ? `${year}-year outlook`
-        : `Remove ${year}-year outlook`;
       return `
-        <button type="button" class="outlook-chip ${
-          isBase ? 'static' : 'removable'
-        }" data-year="${year}" aria-label="${label}">
+        <button type="button" class="outlook-chip" data-year="${year}" aria-label="Remove ${year}-year outlook">
           <span>${year}yr</span>
-          ${isBase ? '' : '<span class="remove-icon" aria-hidden="true">&times;</span>'}
+          <span class="remove-icon" aria-hidden="true">&times;</span>
         </button>
       `;
     })
@@ -478,6 +469,7 @@ function buildScenarioSnapshot() {
     generated_at: new Date().toISOString(),
     inputs: {
       purchase_price: purchasePriceInput ? Number(purchasePriceInput.value) : null,
+      property_value: propertyValueInput ? Number(propertyValueInput.value) : null,
       closing_costs: {
         value: closingCostInput ? Number(closingCostInput.value) : null,
         mode: closingCostMode ? closingCostMode.value : 'percent',
@@ -522,6 +514,13 @@ function loadScenarioSnapshot(snapshot) {
   const { inputs = {}, scenarios } = snapshot;
   if (purchasePriceInput && inputs.purchase_price !== undefined) {
     purchasePriceInput.value = inputs.purchase_price;
+  }
+  if (propertyValueInput) {
+    if (inputs.property_value !== undefined) {
+      propertyValueInput.value = inputs.property_value;
+    } else if (inputs.purchase_price !== undefined) {
+      propertyValueInput.value = inputs.purchase_price;
+    }
   }
   if (closingCostInput && inputs.closing_costs?.value !== undefined) {
     closingCostInput.value = inputs.closing_costs.value;
@@ -649,7 +648,7 @@ function buildScheduleTable(schedule) {
 function buildHorizonTable(data, outlookYears) {
   if (!horizonTable) return;
   const headers =
-    Array.isArray(outlookYears) && outlookYears.length ? outlookYears : baseOutlookYears;
+    Array.isArray(outlookYears) && outlookYears.length ? outlookYears : defaultOutlookYears;
 
   if (horizonHeaderRow) {
     const columnHeaders = headers
@@ -674,20 +673,21 @@ function buildHorizonTable(data, outlookYears) {
       const lookups = new Map(
         (scenario.horizon_outlooks ?? []).map((outlook) => [outlook.horizon_years, outlook]),
       );
-      const renderCell = (cash, loanPayoff, appreciationEquity, downPayment, totalEquity) => {
+      const renderCell = (cash, loanPayoff, equity, downPayment) => {
         const cashClass = cash >= 0 ? 'positive' : 'negative';
+        const totalReturn = cash + equity;
         return `
           <div class="horizon-block">
-            <span class="label">Cash</span>
+            <span class="label">Cashflow</span>
             <span class="value ${cashClass}">${formatSignedCurrency(cash)}</span>
             <span class="label">Loan payoff</span>
             <span class="value positive">${formatCurrency(loanPayoff)}</span>
-            <span class="label">Appreciation + down payment</span>
-            <span class="value">${formatCurrency(appreciationEquity)}</span>
+            <span class="label">Equity</span>
+            <span class="value">${formatCurrency(equity)}</span>
             <span class="label">Down payment</span>
             <span class="value">${formatCurrency(downPayment)}</span>
-            <span class="label">Total equity</span>
-            <span class="value total">${formatCurrency(totalEquity)}</span>
+            <span class="label">Total return</span>
+            <span class="value total">${formatCurrency(totalReturn)}</span>
           </div>
         `;
       };
@@ -701,9 +701,8 @@ function buildHorizonTable(data, outlookYears) {
           return `<td data-label="${year}-yr outlook">${renderCell(
             outlook.cashflow,
             outlook.loan_payoff,
-            outlook.appreciation_equity,
-            scenario.down_payment_amount,
             outlook.equity,
+            scenario.down_payment_amount,
           )}</td>`;
         })
         .join('');
@@ -895,10 +894,16 @@ if (outlookChips) {
     const chip = event.target.closest('.outlook-chip');
     if (!chip) return;
     const year = Number(chip.dataset.year);
-    if (!year || baseOutlookYears.includes(year)) {
+    if (!year) {
+      return;
+    }
+    if (selectedOutlookYears.length <= 1) {
       return;
     }
     const nextYears = selectedOutlookYears.filter((value) => value !== year);
+    if (nextYears.length === selectedOutlookYears.length) {
+      return;
+    }
     setSelectedOutlookYears(nextYears);
     submitCalculatorForm();
   });
@@ -969,6 +974,9 @@ function hydrateDefaultScenarios() {
 hydrateDefaultScenarios();
 if (purchasePriceInput) {
   purchasePriceInput.value = 500000;
+}
+if (propertyValueInput) {
+  propertyValueInput.value = 500000;
 }
 if (closingCostInput) {
   closingCostInput.value = 3;
@@ -1125,6 +1133,10 @@ calculatorForm.addEventListener('submit', async (event) => {
   try {
     const purchasePrice =
       purchasePriceInput && purchasePriceInput.value ? parseFloat(purchasePriceInput.value) : 0;
+    const propertyValue =
+      propertyValueInput && propertyValueInput.value
+        ? parseFloat(propertyValueInput.value)
+        : purchasePrice;
     const closingCostValue =
       closingCostInput && closingCostInput.value ? parseFloat(closingCostInput.value) : 0;
     const closingCostModeValue = closingCostMode ? closingCostMode.value : 'percent';
@@ -1136,6 +1148,9 @@ calculatorForm.addEventListener('submit', async (event) => {
 
     if (!Number.isFinite(purchasePrice) || purchasePrice <= 0) {
       throw new Error('Purchase price must be a positive number.');
+    }
+    if (!Number.isFinite(propertyValue) || propertyValue <= 0) {
+      throw new Error('Property value must be a positive number.');
     }
 
     if (!Number.isFinite(closingCostValue) || closingCostValue < 0) {
@@ -1187,6 +1202,7 @@ calculatorForm.addEventListener('submit', async (event) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         purchase_price: purchasePrice,
+        property_value: propertyValue,
         closing_costs_value: closingCostValue,
         closing_costs_mode: closingCostModeValue,
         monthly_rent: monthlyRent,

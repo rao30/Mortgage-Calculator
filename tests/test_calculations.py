@@ -1,6 +1,12 @@
 import math
+import sys
+from pathlib import Path
 
 import pytest
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
 
 from webapp import app
 from webapp.app import (
@@ -174,7 +180,7 @@ def test_custom_outlook_years_returned():
         closing_costs_value=3,
         closing_costs_mode="percent",
         monthly_rent=0,
-        expenses=ExpenseInputs(),
+        expenses=None,
         scenarios=[
             ScenarioInput(
                 label="Base scenario",
@@ -192,6 +198,63 @@ def test_custom_outlook_years_returned():
     assert horizon_years == [1, 5, 8]
     assert outlooks[0].equity == pytest.approx(response.scenarios[0].year_one_equity)
     assert outlooks[1].equity == pytest.approx(response.scenarios[0].five_year_equity)
+
+
+def test_cashflow_continues_after_payoff():
+    monthly_rent = 2000
+    request = CalculationRequest(
+        purchase_price=300_000,
+        closing_costs_value=3,
+        closing_costs_mode="percent",
+        monthly_rent=monthly_rent,
+        expenses=None,
+        scenarios=[
+            ScenarioInput(
+                label="Short term loan",
+                first_term_years=15,
+                first_annual_interest_rate=5.0,
+                first_lien_percent=80,
+            )
+        ],
+        outlook_years=[15, 40],
+    )
+
+    response = calculate_mortgage(request)
+    outlook_map = {
+        outlook.horizon_years: outlook.cashflow
+        for outlook in response.scenarios[0].horizon_outlooks
+    }
+
+    fifteen_year = outlook_map[15]
+    forty_year = outlook_map[40]
+    expected_extra = (40 - 15) * 12 * monthly_rent
+    assert forty_year > fifteen_year
+    assert forty_year - fifteen_year == pytest.approx(expected_extra, rel=1e-6)
+
+
+def test_property_value_adjusts_equity_calculations():
+    request = CalculationRequest(
+        purchase_price=400_000,
+        property_value=450_000,
+        closing_costs_value=0,
+        closing_costs_mode="fixed",
+        monthly_rent=0,
+        expenses=ExpenseInputs(),
+        scenarios=[
+            ScenarioInput(
+                label="Base scenario",
+                first_term_years=30,
+                first_annual_interest_rate=6.0,
+                first_lien_percent=80,
+            )
+        ],
+        future_assumptions=FutureAssumptions(annual_property_appreciation_percent=0),
+    )
+
+    response = calculate_mortgage(request)
+    scenario = response.scenarios[0]
+    expected_equity = 450_000 - scenario.total_financed
+    assert scenario.appreciation_equity_year_one == pytest.approx(expected_equity, rel=1e-6)
 
 
 def test_future_assumptions_reflected_in_response():

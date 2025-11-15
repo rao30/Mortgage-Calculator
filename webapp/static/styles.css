@@ -755,13 +755,10 @@ body.drawer-open .drawer {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-}
-
-.outlook-chip.removable {
   cursor: pointer;
 }
 
-.outlook-chip.removable:hover {
+.outlook-chip:hover {
   border-color: rgba(56, 189, 248, 0.8);
   color: #f8fafc;
 }

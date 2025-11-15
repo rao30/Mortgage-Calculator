@@ -126,6 +126,11 @@ class CalculationRequest(BaseModel):
         gt=0,
         description="Home value used to compute lien allocations and equity share.",
     )
+    property_value: float | None = Field(
+        default=None,
+        gt=0,
+        description="Observed or appraised property value used for equity calculations.",
+    )
     closing_costs_value: float = Field(
         default=3.0,
         ge=0,
@@ -406,6 +411,7 @@ def read_index() -> str:
 def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
     """Calculate mortgage comparisons and amortization schedules."""
     purchase_price = request.purchase_price or 500_000
+    property_value = request.property_value or purchase_price
     base_loan_amount = request.loan_amount or purchase_price
     if request.closing_costs_mode == "percent":
         closing_costs_amount = purchase_price * (request.closing_costs_value / 100)
@@ -544,15 +550,21 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
             fixed = base_fixed_costs * ((1 + expense_inflation_rate) ** year)
             return fixed + rent_for_month(payment_number) * variable_expense_factor
 
+        def mortgage_payment_for_index(payment_index: int) -> float:
+            if payment_index < len(blended_schedule):
+                return blended_schedule[payment_index].payment
+            return 0.0
+
         def net_cash_for_month(payment_index: int) -> float:
-            payment = blended_schedule[payment_index]
             payment_number = payment_index + 1
-            return rent_for_month(payment_number) - cost_for_month(payment_number) - payment.payment
+            mortgage_payment = mortgage_payment_for_index(payment_index)
+            return rent_for_month(payment_number) - cost_for_month(payment_number) - mortgage_payment
 
         def sum_cashflows(months: int) -> float:
             total = 0.0
-            limit = min(len(blended_schedule), months)
-            for idx in range(limit):
+            if months <= 0:
+                return total
+            for idx in range(months):
                 total += net_cash_for_month(idx)
             return total
 
@@ -564,7 +576,7 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
 
         def property_value_after_months(months: int) -> float:
             years = max(months // 12, 0)
-            return purchase_price * ((1 + appreciation_rate) ** years)
+            return property_value * ((1 + appreciation_rate) ** years)
 
         def equity_after_months(months: int) -> float:
             return max(property_value_after_months(months) - balance_after_months(months), 0.0)
@@ -646,7 +658,7 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
                 ],
             )
         ) or f"Scenario {index}"
-        loan_to_value = total_financed / purchase_price if purchase_price else None
+        loan_to_value = total_financed / property_value if property_value else None
 
         horizon_outlooks = [
             ScenarioHorizonOutlook(
@@ -695,7 +707,7 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
 
     return CalculationResponse(
         loan_amount=base_loan_amount,
-        property_value=purchase_price,
+        property_value=property_value,
         monthly_rent=monthly_rent,
         monthly_operating_costs=monthly_operating_costs,
         scenarios=scenario_payload,
