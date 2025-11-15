@@ -919,6 +919,22 @@ body.drawer-open .drawer {
   .horizon-table-wrapper table {
     min-width: 100%;
   }
+
+  .data-table.horizon td {
+    display: block;
+    padding: 0.75rem 0;
+  }
+
+  .data-table.horizon td::before {
+    margin-right: 0;
+    margin-bottom: 0.4rem;
+  }
+
+  .data-table.horizon td .horizon-block {
+    white-space: normal;
+    grid-template-columns: max-content 1fr;
+    column-gap: 0.5rem;
+  }
 }
 
 .chart-frame {
