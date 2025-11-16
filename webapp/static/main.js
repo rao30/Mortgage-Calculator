@@ -4,7 +4,6 @@ const scheduleTable = document.getElementById('scheduleTable');
 const resultsSection = document.getElementById('results');
 const emptyState = document.getElementById('emptyState');
 const formError = document.getElementById('formError');
-const scenarioTabs = document.getElementById('scenarioTabs');
 const horizonTable = document.getElementById('horizonTable');
 const horizonHeaderRow = document.getElementById('horizonTableHeaders');
 const outlookChips = document.getElementById('outlookChips');
@@ -577,7 +576,7 @@ function buildSummaryTable(data) {
 
       const selectedClass = index === activeScenarioIndex ? 'selected' : '';
       return `
-        <tr class="${selectedClass}">
+        <tr class="${selectedClass}" data-index="${index}">
           <td class="structure-cell" data-label="Structure">
             <div class="structure-label">${escapeHtml(scenario.label)}</div>
             ${breakdown ? `<div class="structure-breakdown">${breakdown}</div>` : ''}
@@ -601,32 +600,6 @@ function buildSummaryTable(data) {
       `;
     })
     .join('');
-}
-
-function buildScenarioTabs(data) {
-  if (!scenarioTabs) return;
-  scenarioTabs.innerHTML = data.scenarios
-    .map(
-      (scenario, index) => `
-        <button type="button" class="scenario-tab ${
-          index === activeScenarioIndex ? 'active' : ''
-        }" data-index="${index}">
-          ${escapeHtml(scenario.label)}
-        </button>
-      `,
-    )
-    .join('');
-
-  const summaryRows = summaryTable?.querySelectorAll('tr');
-  if (summaryRows) {
-    summaryRows.forEach((row, index) => {
-      if (index === activeScenarioIndex) {
-        row.classList.add('selected');
-      } else {
-        row.classList.remove('selected');
-      }
-    });
-  }
 }
 
 function buildScheduleTable(schedule) {
@@ -869,7 +842,6 @@ function renderResults(data) {
   mortgageData = data;
   activeScenarioIndex = 0;
   buildSummaryTable(data);
-  buildScenarioTabs(data);
   buildHorizonTable(data, selectedOutlookYears);
   updateScenarioDetails(activeScenarioIndex);
   updateResultsTabUI();
@@ -879,12 +851,13 @@ function renderResults(data) {
   }
 }
 
-if (scenarioTabs) {
-  scenarioTabs.addEventListener('click', (event) => {
-    const tab = event.target.closest('.scenario-tab');
-    if (!tab || !mortgageData) return;
-    activeScenarioIndex = Number(tab.dataset.index);
-    buildScenarioTabs(mortgageData);
+if (summaryTable) {
+  summaryTable.addEventListener('click', (event) => {
+    const row = event.target.closest('tr');
+    if (!row || !mortgageData) return;
+    const index = Number(row.dataset.index);
+    if (!Number.isFinite(index)) return;
+    activeScenarioIndex = index;
     updateScenarioDetails(activeScenarioIndex);
   });
 }
