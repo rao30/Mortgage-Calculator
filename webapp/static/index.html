@@ -398,6 +398,155 @@
         </section>
       </main>
       </div>
+      <div id="loanPayoffView" class="hidden">
+        <header class="hero">
+          <div class="hero__badge">Loan payoff tool</div>
+          <h1>Pay off any note faster.</h1>
+          <p>
+            Model the impact of extra payments, track milestones, and share a plan for retiring debt
+            early. This dedicated view is wired for the inputs and insights the payoff tool will need.
+          </p>
+        </header>
+        <main class="shell">
+          <section class="card form-card payoff-card">
+            <div class="form-head">
+              <div>
+                <p class="eyebrow">Loan payoff inputs</p>
+                <h2>Capture the basics for your accelerated payoff scenario.</h2>
+                <p class="subtle">
+                  Once the calculator logic lands, the numbers below will flow directly into the
+                  payoff charts and tables.
+                </p>
+              </div>
+            </div>
+            <form id="payoffForm" class="form-grid payoff-grid" aria-describedby="payoffFormHelper">
+              <div class="grid-two">
+                <label class="form-field">
+                  <span class="form-label">Current balance</span>
+                  <div class="form-input">
+                    <span class="prefix">$</span>
+                    <input id="payoffBalance" type="number" min="0" step="1000" placeholder="325000" />
+                  </div>
+                </label>
+                <label class="form-field">
+                  <span class="form-label">Interest rate</span>
+                  <div class="form-input">
+                    <input id="payoffRate" type="number" min="0" step="0.01" placeholder="6.25" />
+                    <span class="suffix">%</span>
+                  </div>
+                </label>
+              </div>
+              <div class="grid-two">
+                <label class="form-field">
+                  <span class="form-label">Minimum monthly payment</span>
+                  <div class="form-input">
+                    <span class="prefix">$</span>
+                    <input id="payoffMinimum" type="number" min="0" step="50" placeholder="1987" />
+                  </div>
+                </label>
+                <label class="form-field">
+                  <span class="form-label">Extra monthly payment</span>
+                  <div class="form-input">
+                    <span class="prefix">$</span>
+                    <input id="payoffExtra" type="number" min="0" step="50" placeholder="350" />
+                  </div>
+                </label>
+              </div>
+              <div class="grid-two">
+                <label class="form-field">
+                  <span class="form-label">One-time lump sum</span>
+                  <div class="form-input">
+                    <span class="prefix">$</span>
+                    <input id="payoffLumpSum" type="number" min="0" step="500" placeholder="10000" />
+                  </div>
+                </label>
+                <label class="form-field">
+                  <span class="form-label">Extra payment start date</span>
+                  <input id="payoffStartDate" class="text-input" type="month" />
+                </label>
+              </div>
+              <div class="grid-two">
+                <label class="form-field">
+                  <span class="form-label">Payment cadence</span>
+                  <select id="payoffCadence" class="select">
+                    <option value="monthly" selected>Monthly</option>
+                    <option value="biweekly">Bi-weekly</option>
+                    <option value="weekly">Weekly</option>
+                  </select>
+                </label>
+                <label class="form-field">
+                  <span class="form-label">Target payoff goal</span>
+                  <input
+                    id="payoffGoal"
+                    class="text-input"
+                    type="text"
+                    placeholder="Freedom in 8 years"
+                  />
+                </label>
+              </div>
+              <div class="cta-row">
+                <div>
+                  <p id="payoffFormHelper" class="subtle">
+                    Buttons stay disabled until the payoff math is wired up—use the form to outline
+                    expected inputs today.
+                  </p>
+                </div>
+                <div class="cta-actions">
+                  <button type="button" class="btn ghost" disabled>Import payoff file</button>
+                  <button type="submit" class="btn primary" disabled>Generate payoff plan</button>
+                </div>
+              </div>
+            </form>
+          </section>
+
+          <section class="card payoff-preview">
+            <div class="form-head payoff-preview__head">
+              <div>
+                <p class="eyebrow">Payoff preview</p>
+                <h2>Quick milestones refresh immediately once calculations go live.</h2>
+              </div>
+              <p class="subtle">
+                Placeholder values below help stakeholders understand the type of insights this page
+                will deliver.
+              </p>
+            </div>
+            <div class="payoff-summary-grid">
+              <article class="tile payoff-summary">
+                <p class="tile__label">Projected payoff date</p>
+                <div class="tile__value" id="payoffDatePreview">—</div>
+                <p class="tile__hint">Will reflect the month &amp; year of the final payment.</p>
+              </article>
+              <article class="tile payoff-summary">
+                <p class="tile__label">Interest saved</p>
+                <div class="tile__value" id="payoffInterestPreview">—</div>
+                <p class="tile__hint">Shows the delta vs. the minimum-payment plan.</p>
+              </article>
+              <article class="tile payoff-summary">
+                <p class="tile__label">Months shaved</p>
+                <div class="tile__value" id="payoffMonthsPreview">—</div>
+                <p class="tile__hint">Counts how many payments are removed by extra cash.</p>
+              </article>
+            </div>
+            <div class="payoff-roadmap">
+              <h3>Coming soon</h3>
+              <ul>
+                <li>
+                  <span class="badge pill">Timeline</span>
+                  Interactive payoff schedule with sliders for extra cash and lump sums.
+                </li>
+                <li>
+                  <span class="badge pill">Sharing</span>
+                  One-click exports for accountability partners or borrowers.
+                </li>
+                <li>
+                  <span class="badge pill">Insights</span>
+                  Surface inflection points, break-even dates, and ROI on each extra dollar.
+                </li>
+              </ul>
+            </div>
+          </section>
+        </main>
+      </div>
       <div id="otherToolsView" class="blank-view hidden">
         <main class="shell"></main>
       </div>
@@ -405,6 +554,7 @@
         <div class="drawer__logo">Loan Analysis</div>
         <div class="drawer__nav">
           <button type="button" class="drawer__link active" data-view="loan">Loan Analysis</button>
+          <button type="button" class="drawer__link" data-view="payoff">Loan Payoff</button>
           <button type="button" class="drawer__link" data-view="other">Other tools</button>
         </div>
       </nav>

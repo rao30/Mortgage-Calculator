@@ -26,6 +26,7 @@ const insightsPane = document.getElementById('insightsPane');
 const amortizationPane = document.getElementById('amortizationPane');
 const navToggle = document.getElementById('navToggle');
 const loanAnalysisView = document.getElementById('loanAnalysisView');
+const loanPayoffView = document.getElementById('loanPayoffView');
 const otherToolsView = document.getElementById('otherToolsView');
 const drawerLinks = document.querySelectorAll('.drawer__link[data-view]');
 const appBarTitle = document.querySelector('.app-bar__title');
@@ -1062,6 +1063,7 @@ if (navToggle) {
 
 const viewTargets = {
   loan: loanAnalysisView,
+  payoff: loanPayoffView,
   other: otherToolsView,
 };
 
