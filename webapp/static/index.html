@@ -262,18 +262,6 @@
               </div>
             </section>
 
-          <div class="cta-row">
-            <div>
-              <p class="subtle">Includes payoff curves, amortization tables, and ROI-grade ratios.</p>
-              <p id="formError" class="text-sm text-rose-300 hidden"></p>
-            </div>
-              <div class="cta-actions">
-                <button type="button" id="loadScenario" class="btn ghost">Load scenario</button>
-                <button type="button" id="saveScenario" class="btn ghost">Save scenario</button>
-                <button type="submit" class="btn primary">Generate investor brief</button>
-              </div>
-            </div>
-            <input id="scenarioFileInput" type="file" accept="application/json" class="hidden" />
           </form>
         </section>
 
@@ -288,6 +276,18 @@
           <div class="scenario-panel">
             <div id="scenarios" class="scenario-grid"></div>
           </div>
+          <div class="scenario-actions">
+            <div>
+              <p class="subtle">Includes payoff curves, amortization tables, and ROI-grade ratios.</p>
+              <p id="formError" class="text-sm text-rose-300 hidden"></p>
+            </div>
+            <div class="scenario-actions__buttons">
+              <button type="button" id="loadScenario" class="btn ghost">Load scenario</button>
+              <button type="button" id="saveScenario" class="btn ghost">Save scenario</button>
+              <button type="submit" form="calculatorForm" class="btn primary">Generate investor brief</button>
+            </div>
+          </div>
+          <input id="scenarioFileInput" type="file" accept="application/json" class="hidden" />
         </section>
 
         <section id="results" class="stack hidden">

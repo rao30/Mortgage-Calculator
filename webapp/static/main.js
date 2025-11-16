@@ -34,61 +34,74 @@ let selectedOutlookYears = [...defaultOutlookYears];
 
 const scenarioDefaults = {
   label: '',
-  firstTerm: 30,
-  firstRate: 6.25,
-  firstPercent: 80,
-  secondTerm: 15,
-  secondRate: 8.5,
-  secondPercent: 0,
+  address: '',
+  originationMonth: null,
+  originationYear: null,
+  liens: [
+    {
+      percent: 80,
+      term: 30,
+      rate: 6.25,
+    },
+  ],
 };
 
 const defaultScenarios = [
   {
     label: '15yr single note',
-    firstTerm: 15,
-    firstRate: 5.5,
-    firstPercent: 80,
-    secondTerm: null,
-    secondRate: null,
-    secondPercent: 0,
+    liens: [
+      {
+        percent: 80,
+        term: 15,
+        rate: 5.5,
+      },
+    ],
   },
   {
     label: '30yr single note',
-    firstTerm: 30,
-    firstRate: 6.5,
-    firstPercent: 80,
-    secondTerm: null,
-    secondRate: null,
-    secondPercent: 0,
+    liens: [
+      {
+        percent: 80,
+        term: 30,
+        rate: 6.5,
+      },
+    ],
   },
   {
     label: '5% down primary house hack',
-    firstTerm: 30,
-    firstRate: 6.5,
-    firstPercent: 95,
-    secondTerm: null,
-    secondRate: null,
-    secondPercent: 0,
+    liens: [
+      {
+        percent: 95,
+        term: 30,
+        rate: 6.5,
+      },
+    ],
   },
   {
     label: '50yr single note',
-    firstTerm: 50,
-    firstRate: 7.0,
-    firstPercent: 80,
-    secondTerm: null,
-    secondRate: null,
-    secondPercent: 0,
+    liens: [
+      {
+        percent: 80,
+        term: 50,
+        rate: 7.0,
+      },
+    ],
   },
   {
     label: '50/40/10 stacked',
-    firstTerm: 30,
-    firstRate: 7.5,
-    firstPercent: 50,
-    secondTerm: 30,
-    secondRate: 3.0,
-    secondPercent: 40,
+    liens: [
+      {
+        percent: 50,
+        term: 30,
+        rate: 7.5,
+      },
+      {
+        percent: 40,
+        term: 30,
+        rate: 3.0,
+      },
+    ],
   },
-
 ];
 
 const defaultExpenses = {
@@ -228,7 +241,14 @@ function sampleSchedule(schedule, maxPoints = 720) {
 }
 
 function createScenarioRow(config = {}) {
-  const values = { ...scenarioDefaults, ...config };
+  const values = {
+    label: config.label ?? '',
+    liens:
+      Array.isArray(config.liens) && config.liens.length
+        ? config.liens
+        : scenarioDefaults.liens.map((lien) => ({ ...lien })),
+  };
+
   const row = document.createElement('div');
   row.className = 'scenario-row';
   row.innerHTML = `
@@ -261,70 +281,125 @@ function createScenarioRow(config = {}) {
         </button>
       </div>
     </div>
-    <div class="scenario-row__grid">
-      <label class="form-field">
-        <span class="form-label">First lien % of value</span>
-        <input type="number" data-field="firstPercent" min="1" max="100" step="1" required />
-      </label>
-      <label class="form-field">
-        <span class="form-label">First term (years)</span>
-        <input type="number" data-field="firstTerm" min="1" step="1" required />
-      </label>
-      <label class="form-field">
-        <span class="form-label">First rate (%)</span>
-        <input type="number" data-field="firstRate" min="0" step="0.01" required />
-      </label>
-    </div>
-    <div class="scenario-row__grid">
-      <label class="form-field">
-        <span class="form-label">Second lien %</span>
-        <input type="number" data-field="secondPercent" min="0" max="100" step="1" value="0" />
-      </label>
-      <label class="form-field">
-        <span class="form-label">Second term (years)</span>
-        <input type="number" data-field="secondTerm" min="1" step="1" />
-      </label>
-      <label class="form-field">
-        <span class="form-label">Second rate (%)</span>
-        <input type="number" data-field="secondRate" min="0" step="0.01" />
-      </label>
+    <div class="lien-section">
+      <div class="lien-list"></div>
+      <button type="button" class="btn ghost add-lien" aria-label="Add lien">Add lien</button>
     </div>
   `;
   scenariosContainer.appendChild(row);
-  setScenarioRowValues(row, values);
-}
 
-function setScenarioRowValues(row, values) {
-  row.querySelector('[data-field="label"]').value = values.label ?? '';
-  row.querySelector('[data-field="firstPercent"]').value = Number.isFinite(values.firstPercent)
-    ? values.firstPercent
-    : scenarioDefaults.firstPercent;
-  row.querySelector('[data-field="firstTerm"]').value = Number.isFinite(values.firstTerm)
-    ? values.firstTerm
-    : scenarioDefaults.firstTerm;
-  row.querySelector('[data-field="firstRate"]').value = Number.isFinite(values.firstRate)
-    ? values.firstRate
-    : scenarioDefaults.firstRate;
-  row.querySelector('[data-field="secondPercent"]').value = Number.isFinite(values.secondPercent)
-    ? values.secondPercent
-    : scenarioDefaults.secondPercent;
-  row.querySelector('[data-field="secondTerm"]').value = Number.isFinite(values.secondTerm)
-    ? values.secondTerm
-    : '';
-  row.querySelector('[data-field="secondRate"]').value = Number.isFinite(values.secondRate)
-    ? values.secondRate
-    : '';
+  const labelInput = row.querySelector('[data-field="label"]');
+  const lienList = row.querySelector('.lien-list');
+  const addLienButton = row.querySelector('.add-lien');
+  labelInput.value = values.label ?? '';
+  row.dataset.address = values.address ?? '';
+  row.dataset.originationMonth =
+    values.originationMonth !== undefined && values.originationMonth !== null
+      ? String(values.originationMonth)
+      : '';
+  row.dataset.originationYear =
+    values.originationYear !== undefined && values.originationYear !== null
+      ? String(values.originationYear)
+      : '';
+
+  const updateLienLabels = () => {
+    const entries = lienList.querySelectorAll('.lien-entry');
+    entries.forEach((entry, index) => {
+      const title = entry.querySelector('.lien-entry__title');
+      if (title) {
+        title.textContent = `Lien ${index + 1}`;
+      }
+      const removeButton = entry.querySelector('.remove-lien');
+      if (removeButton) {
+        removeButton.classList.toggle('hidden', entries.length === 1);
+      }
+    });
+  };
+
+  const createLienEntry = (lienValues = {}) => {
+    const entry = document.createElement('div');
+    entry.className = 'lien-entry';
+    entry.innerHTML = `
+      <div class="lien-entry__header">
+        <span class="lien-entry__title">Lien</span>
+        <button type="button" class="icon-button danger remove-lien" aria-label="Remove lien">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M9 3V4H4V6H5V20C5 21.105 5.895 22 7 22H17C18.105 22 19 21.105 19 20V6H20V4H15V3H9ZM7 6H17V20H7V6ZM9 8V18H11V8H9ZM13 8V18H15V8H13Z"
+            />
+          </svg>
+        </button>
+      </div>
+      <div class="scenario-row__grid">
+        <label class="form-field">
+          <span class="form-label">Lien % of value</span>
+          <input type="number" data-field="percent" min="0.01" max="100" step="0.1" required />
+        </label>
+        <label class="form-field">
+          <span class="form-label">Term (years)</span>
+          <input type="number" data-field="term" min="1" step="1" required />
+        </label>
+        <label class="form-field">
+          <span class="form-label">Rate (%)</span>
+          <input type="number" data-field="rate" min="0" step="0.01" required />
+        </label>
+      </div>
+    `;
+    const percentInput = entry.querySelector('[data-field="percent"]');
+    const termInput = entry.querySelector('[data-field="term"]');
+    const rateInput = entry.querySelector('[data-field="rate"]');
+    percentInput.value = Number.isFinite(lienValues.percent) ? lienValues.percent : 0;
+    termInput.value = Number.isFinite(lienValues.term) ? lienValues.term : 0;
+    rateInput.value = Number.isFinite(lienValues.rate) ? lienValues.rate : 0;
+    return entry;
+  };
+
+  const addLien = (lienValues = {}) => {
+    const entry = createLienEntry(lienValues);
+    lienList.appendChild(entry);
+    updateLienLabels();
+  };
+
+  values.liens.forEach((lien) => addLien(lien));
+  if (!lienList.children.length) {
+    addLien();
+  }
+
+  addLienButton.addEventListener('click', () => {
+    addLien();
+  });
+
+  row.addEventListener('click', (event) => {
+    const removeButton = event.target.closest('.remove-lien');
+    if (removeButton) {
+      const entry = removeButton.closest('.lien-entry');
+      if (entry && lienList.children.length > 1) {
+        entry.remove();
+        updateLienLabels();
+      }
+    }
+  });
 }
 
 function readScenarioConfig(row) {
+  const liens = Array.from(row.querySelectorAll('.lien-entry')).map((entry) => ({
+    percent: parseFloat(entry.querySelector('[data-field="percent"]').value) || 0,
+    term: parseInt(entry.querySelector('[data-field="term"]').value, 10),
+    rate: parseFloat(entry.querySelector('[data-field="rate"]').value),
+  }));
+  const address = row.dataset.address || '';
+  const originationMonth = row.dataset.originationMonth
+    ? parseInt(row.dataset.originationMonth, 10)
+    : null;
+  const originationYear = row.dataset.originationYear
+    ? parseInt(row.dataset.originationYear, 10)
+    : null;
   return {
     label: row.querySelector('[data-field="label"]').value.trim(),
-    firstPercent: parseFloat(row.querySelector('[data-field="firstPercent"]').value),
-    firstTerm: parseInt(row.querySelector('[data-field="firstTerm"]').value, 10),
-    firstRate: parseFloat(row.querySelector('[data-field="firstRate"]').value),
-    secondPercent: parseFloat(row.querySelector('[data-field="secondPercent"]').value) || 0,
-    secondTerm: parseInt(row.querySelector('[data-field="secondTerm"]').value, 10),
-    secondRate: parseFloat(row.querySelector('[data-field="secondRate"]').value),
+    address,
+    originationMonth: Number.isFinite(originationMonth) ? originationMonth : null,
+    originationYear: Number.isFinite(originationYear) ? originationYear : null,
+    liens,
   };
 }
 
@@ -332,25 +407,91 @@ function readScenarios() {
   return Array.from(scenariosContainer.querySelectorAll('.scenario-row')).map((row, index) => {
     const config = readScenarioConfig(row);
     const label = config.label || `Scenario ${index + 1}`;
-    const payload = {
+    const address = config.address ? config.address.trim() : '';
+    const originationMonth = Number.isFinite(config.originationMonth)
+      ? config.originationMonth
+      : null;
+    const originationYear = Number.isFinite(config.originationYear) ? config.originationYear : null;
+    const liens = (config.liens.length ? config.liens : scenarioDefaults.liens).map((lien) => ({
+      percent_of_value: lien.percent,
+      term_years: lien.term,
+      annual_interest_rate: lien.rate,
+    }));
+    return {
       label,
-      first_term_years: config.firstTerm,
-      first_annual_interest_rate: config.firstRate,
-      first_lien_percent: config.firstPercent,
-      second_lien_percent: config.secondPercent,
-      second_term_years: null,
-      second_annual_interest_rate: null,
+      address: address || null,
+      origination_month: originationMonth,
+      origination_year: originationYear,
+      liens,
     };
-
-    if (config.secondPercent > 0) {
-      payload.second_term_years = Number.isFinite(config.secondTerm) ? config.secondTerm : null;
-      payload.second_annual_interest_rate = Number.isFinite(config.secondRate)
-        ? config.secondRate
-        : null;
-    }
-
-    return payload;
   });
+}
+
+function normalizeScenarioDefinition(scenario) {
+  if (!scenario || typeof scenario !== 'object') {
+    return {
+      label: '',
+      liens: scenarioDefaults.liens.map((lien) => ({ ...lien })),
+    };
+  }
+  const normalized = [];
+  const metadata = {
+    address: scenario.address ?? scenario.address_line ?? '',
+    originationMonth:
+      scenario.origination_month ?? scenario.originationMonth ?? scenario.start_month ?? null,
+    originationYear:
+      scenario.origination_year ?? scenario.originationYear ?? scenario.start_year ?? null,
+  };
+  if (Array.isArray(scenario.liens) && scenario.liens.length) {
+    scenario.liens.forEach((lien) => {
+      normalized.push({
+        percent: Number(lien.percent_of_value ?? lien.percent ?? lien.share_percent ?? 0),
+        term: Number(lien.term_years ?? lien.term ?? 0),
+        rate: Number(lien.annual_interest_rate ?? lien.rate ?? 0),
+      });
+    });
+  } else {
+    const firstPercent = Number(scenario.first_lien_percent);
+    if (Number.isFinite(firstPercent) && firstPercent > 0) {
+      normalized.push({
+        percent: firstPercent,
+        term: Number(scenario.first_term_years),
+        rate: Number(scenario.first_annual_interest_rate),
+      });
+    }
+    const secondPercent = Number(scenario.second_lien_percent);
+    if (Number.isFinite(secondPercent) && secondPercent > 0) {
+      normalized.push({
+        percent: secondPercent,
+        term: Number(scenario.second_term_years),
+        rate: Number(scenario.second_annual_interest_rate),
+      });
+    }
+  }
+  const liens = (normalized.length ? normalized : scenarioDefaults.liens).map((lien) => ({
+    percent: Number.isFinite(lien.percent) ? lien.percent : scenarioDefaults.liens[0].percent,
+    term: Number.isFinite(lien.term) ? lien.term : scenarioDefaults.liens[0].term,
+    rate: Number.isFinite(lien.rate) ? lien.rate : scenarioDefaults.liens[0].rate,
+  }));
+  const parsedMonth =
+    metadata.originationMonth !== undefined &&
+    metadata.originationMonth !== null &&
+    metadata.originationMonth !== ''
+      ? Number(metadata.originationMonth)
+      : null;
+  const parsedYear =
+    metadata.originationYear !== undefined &&
+    metadata.originationYear !== null &&
+    metadata.originationYear !== ''
+      ? Number(metadata.originationYear)
+      : null;
+  return {
+    label: scenario.label || '',
+    address: metadata.address || '',
+    originationMonth: Number.isFinite(parsedMonth) ? parsedMonth : null,
+    originationYear: Number.isFinite(parsedYear) ? parsedYear : null,
+    liens,
+  };
 }
 
 function readExpenseInputs() {
@@ -492,16 +633,7 @@ function hydrateScenarios(scenarios) {
   }
 
   scenarios.forEach((scenario) => {
-    const config = {
-      label: scenario.label || '',
-      firstTerm: scenario.first_term_years,
-      firstRate: scenario.first_annual_interest_rate,
-      firstPercent: scenario.first_lien_percent,
-      secondTerm: scenario.second_term_years,
-      secondRate: scenario.second_annual_interest_rate,
-      secondPercent: scenario.second_lien_percent,
-    };
-    createScenarioRow(config);
+    createScenarioRow(normalizeScenarioDefinition(scenario));
   });
 }
 
@@ -756,6 +888,7 @@ function updateCompositionChart(schedule) {
   const labels = sample.map((p) => p.payment_number);
   const principal = sample.map((p) => p.principal);
   const interest = sample.map((p) => p.interest);
+  const total = sample.map((p) => p.payment);
 
   if (compositionChart) {
     compositionChart.destroy();
@@ -781,6 +914,15 @@ function updateCompositionChart(schedule) {
           borderColor: 'rgb(248, 113, 113)',
           backgroundColor: 'rgba(248, 113, 113, 0.2)',
           fill: true,
+          tension: 0.35,
+          pointRadius: 0,
+        },
+        {
+          label: 'Total payment',
+          data: total,
+          borderColor: 'rgb(148, 163, 184)',
+          borderDash: [6, 4],
+          fill: false,
           tension: 0.35,
           pointRadius: 0,
         },
@@ -1099,7 +1241,9 @@ calculatorForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   showError('');
 
-  const submitButton = calculatorForm.querySelector('button[type="submit"]');
+  const submitButton =
+    calculatorForm.querySelector('button[type="submit"]') ||
+    document.querySelector('button[type="submit"][form="calculatorForm"]');
   submitButton.disabled = true;
   submitButton.textContent = 'Generating...';
 
@@ -1130,44 +1274,31 @@ calculatorForm.addEventListener('submit', async (event) => {
       throw new Error('Closing costs must be zero or greater.');
     }
 
-    if (
-      scenarios.some(
-        (scenario) =>
-          !Number.isFinite(scenario.first_term_years) || scenario.first_term_years <= 0,
-      )
-    ) {
-      throw new Error('Each scenario needs a positive first-lien term in years.');
-    }
+    const invalidScenario = scenarios.some((scenario) => {
+      if (!Array.isArray(scenario.liens) || scenario.liens.length === 0) {
+        return true;
+      }
+      const totalPercent = scenario.liens.reduce(
+        (sum, lien) => sum + (Number(lien.percent_of_value) || 0),
+        0,
+      );
+      if (totalPercent > 100.0001) {
+        return true;
+      }
+      return scenario.liens.some(
+        (lien) =>
+          !Number.isFinite(lien.percent_of_value) ||
+          lien.percent_of_value <= 0 ||
+          lien.percent_of_value > 100 ||
+          !Number.isFinite(lien.term_years) ||
+          lien.term_years <= 0 ||
+          !Number.isFinite(lien.annual_interest_rate) ||
+          lien.annual_interest_rate < 0,
+      );
+    });
 
-    if (
-      scenarios.some(
-        (scenario) =>
-          !Number.isFinite(scenario.first_annual_interest_rate) ||
-          scenario.first_annual_interest_rate < 0,
-      )
-    ) {
-      throw new Error('First-lien interest rates must be zero or greater.');
-    }
-
-    if (
-      scenarios.some(
-        (scenario) =>
-          scenario.second_lien_percent > 0 &&
-          (!Number.isFinite(scenario.second_term_years) || scenario.second_term_years <= 0),
-      )
-    ) {
-      throw new Error('Second-lien scenarios need a positive term in years.');
-    }
-
-    if (
-      scenarios.some(
-        (scenario) =>
-          scenario.second_lien_percent > 0 &&
-          (!Number.isFinite(scenario.second_annual_interest_rate) ||
-            scenario.second_annual_interest_rate < 0),
-      )
-    ) {
-      throw new Error('Second-lien interest rates must be zero or greater.');
+    if (invalidScenario) {
+      throw new Error('Each scenario needs valid lien inputs with a combined share up to 100%.');
     }
 
     const response = await fetch('/api/calculate', {

@@ -112,19 +112,33 @@ def test_expense_inputs_monthly_calculation():
 def test_scenario_input_validation():
     with pytest.raises(ValueError):
         ScenarioInput(
-            first_term_years=30,
-            first_annual_interest_rate=6,
-            first_lien_percent=70,
-            second_lien_percent=40,
+            liens=[
+                {
+                    "percent_of_value": 70,
+                    "term_years": 30,
+                    "annual_interest_rate": 6.0,
+                },
+                {
+                    "percent_of_value": 40,
+                    "term_years": 30,
+                    "annual_interest_rate": 6.0,
+                },
+            ]
         )
     with pytest.raises(ValueError):
         ScenarioInput(
-            first_term_years=30,
-            first_annual_interest_rate=6,
-            first_lien_percent=90,
-            second_lien_percent=15,
-            second_term_years=20,
-            second_annual_interest_rate=2,
+            liens=[
+                {
+                    "percent_of_value": 90,
+                    "term_years": 30,
+                    "annual_interest_rate": 6.0,
+                },
+                {
+                    "percent_of_value": 15,
+                    "term_years": 20,
+                    "annual_interest_rate": 2.0,
+                },
+            ]
         )
 
 
@@ -145,18 +159,28 @@ def test_calculate_mortgage_with_expenses():
         scenarios=[
             ScenarioInput(
                 label="Test 80% LTV",
-                first_term_years=30,
-                first_annual_interest_rate=6.25,
-                first_lien_percent=80,
+                liens=[
+                    {
+                        "percent_of_value": 80,
+                        "term_years": 30,
+                        "annual_interest_rate": 6.25,
+                    }
+                ],
             ),
             ScenarioInput(
                 label="Stacked 50/30",
-                first_term_years=30,
-                first_annual_interest_rate=7.25,
-                first_lien_percent=50,
-                second_term_years=15,
-                second_annual_interest_rate=5.0,
-                second_lien_percent=30,
+                liens=[
+                    {
+                        "percent_of_value": 50,
+                        "term_years": 30,
+                        "annual_interest_rate": 7.25,
+                    },
+                    {
+                        "percent_of_value": 30,
+                        "term_years": 15,
+                        "annual_interest_rate": 5.0,
+                    },
+                ],
             ),
         ],
         schedule_limit=12,
@@ -170,8 +194,8 @@ def test_calculate_mortgage_with_expenses():
     assert math.isfinite(first.cash_on_cash_return)
     stacked = response.scenarios[1]
     assert len(stacked.components) == 2
-    assert stacked.components[0].label == "First lien"
-    assert stacked.components[1].label == "Second lien"
+    assert stacked.components[0].label == "Lien 1"
+    assert stacked.components[1].label == "Lien 2"
 
 
 def test_custom_outlook_years_returned():
@@ -184,9 +208,13 @@ def test_custom_outlook_years_returned():
         scenarios=[
             ScenarioInput(
                 label="Base scenario",
-                first_term_years=30,
-                first_annual_interest_rate=6.25,
-                first_lien_percent=80,
+                liens=[
+                    {
+                        "percent_of_value": 80,
+                        "term_years": 30,
+                        "annual_interest_rate": 6.25,
+                    }
+                ],
             )
         ],
         outlook_years=[1, 5, 8],
@@ -211,9 +239,13 @@ def test_cashflow_continues_after_payoff():
         scenarios=[
             ScenarioInput(
                 label="Short term loan",
-                first_term_years=15,
-                first_annual_interest_rate=5.0,
-                first_lien_percent=80,
+                liens=[
+                    {
+                        "percent_of_value": 80,
+                        "term_years": 15,
+                        "annual_interest_rate": 5.0,
+                    }
+                ],
             )
         ],
         outlook_years=[15, 40],
@@ -243,9 +275,13 @@ def test_property_value_adjusts_equity_calculations():
         scenarios=[
             ScenarioInput(
                 label="Base scenario",
-                first_term_years=30,
-                first_annual_interest_rate=6.0,
-                first_lien_percent=80,
+                liens=[
+                    {
+                        "percent_of_value": 80,
+                        "term_years": 30,
+                        "annual_interest_rate": 6.0,
+                    }
+                ],
             )
         ],
         future_assumptions=FutureAssumptions(annual_property_appreciation_percent=0),
@@ -272,9 +308,13 @@ def test_future_assumptions_reflected_in_response():
         scenarios=[
             ScenarioInput(
                 label="Base scenario",
-                first_term_years=30,
-                first_annual_interest_rate=6.5,
-                first_lien_percent=80,
+                liens=[
+                    {
+                        "percent_of_value": 80,
+                        "term_years": 30,
+                        "annual_interest_rate": 6.5,
+                    }
+                ],
             )
         ],
         future_assumptions=assumptions,
@@ -293,9 +333,13 @@ def test_property_appreciation_boosts_year_one_equity():
             expenses=ExpenseInputs(),
             scenarios=[
                 ScenarioInput(
-                    first_term_years=30,
-                    first_annual_interest_rate=6.25,
-                    first_lien_percent=80,
+                    liens=[
+                        {
+                            "percent_of_value": 80,
+                            "term_years": 30,
+                            "annual_interest_rate": 6.25,
+                        }
+                    ],
                 )
             ],
             future_assumptions=assumptions,

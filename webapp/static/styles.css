@@ -443,6 +443,43 @@ body.drawer-open .drawer {
   margin-left: auto;
 }
 
+.lien-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.lien-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.lien-entry {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 1rem;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.lien-entry__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.lien-entry__title {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.8);
+}
+
+.lien-section .add-lien {
+  align-self: flex-start;
+}
+
 @media (max-width: 768px) {
   .scenario-row__top {
     flex-direction: column;
@@ -554,6 +591,25 @@ body.drawer-open .drawer {
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
+}
+
+.scenario-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.scenario-actions__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.scenario-actions__buttons .btn {
+  white-space: nowrap;
 }
 
 .hidden {

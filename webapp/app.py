@@ -72,49 +72,47 @@ DEFAULT_HORIZON_YEARS = (1, 5, 10, 15)
 
 
 
+class LienComponentInput(BaseModel):
+    percent_of_value: float = Field(
+        ..., gt=0, le=100, description="Percent of property value financed by this lien."
+    )
+    term_years: int = Field(..., gt=0, description="Lien term in years.")
+    annual_interest_rate: float = Field(
+        ..., ge=0, description="Lien annual interest rate percentage."
+    )
+
+
 class ScenarioInput(BaseModel):
     label: str | None = Field(
         default=None,
         description="Optional label used throughout the UI to identify the scenario.",
     )
-    first_term_years: int = Field(..., gt=0, description="First lien term in years")
-    first_annual_interest_rate: float = Field(
-        ..., ge=0, description="First lien annual interest rate percentage"
+    liens: List[LienComponentInput] = Field(
+        ..., min_items=1, description="Liens that comprise the financing stack."
     )
-    first_lien_percent: float = Field(
-        ..., gt=0, le=100, description="Percent of property value financed by the first lien."
+    address: str | None = Field(
+        default=None,
+        description="Optional property address associated with this scenario.",
     )
-    second_lien_percent: float = Field(
-        default=0,
-        ge=0,
-        le=100,
-        description="Percent of property value financed by the second lien.",
+    origination_month: int | None = Field(
+        default=None,
+        ge=1,
+        le=12,
+        description="Origination month (1-12) for the financing stack.",
     )
-    second_term_years: int | None = Field(
-        default=None, gt=0, description="Second lien term in years."
-    )
-    second_annual_interest_rate: float | None = Field(
-        default=None, ge=0, description="Second lien annual interest rate percentage."
+    origination_year: int | None = Field(
+        default=None,
+        ge=1900,
+        le=3000,
+        description="Origination year for the financing stack.",
     )
 
-    @validator("second_term_years", "second_annual_interest_rate", always=True)
-    def _validate_second_lien_fields(
-        cls, value: int | float | None, values: dict[str, object], field
-    ) -> int | float | None:
-        second_percent = values.get("second_lien_percent", 0) or 0
-        if second_percent > 0 and value is None:
-            raise ValueError(f"{field.name.replace('_', ' ')} is required for a second lien")
-        if second_percent == 0:
-            return None
-        return value
-
-    @validator("second_lien_percent")
-    def _validate_percentages(cls, second_percent: float, values: dict[str, object]) -> float:
-        first_percent = values.get("first_lien_percent", 0) or 0
-        total = first_percent + second_percent
+    @validator("liens")
+    def _validate_percentages(cls, liens: List[LienComponentInput]) -> List[LienComponentInput]:
+        total = sum(lien.percent_of_value for lien in liens)
         if total > 100.0001:
             raise ValueError("Combined lien percentages cannot exceed 100% of the property value")
-        return second_percent
+        return liens
 
 
 class CalculationRequest(BaseModel):
@@ -437,38 +435,59 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
     default_structures = [
         ScenarioInput(
             label="15yr single note",
-            first_term_years=15,
-            first_annual_interest_rate=5.5,
-            first_lien_percent=80,
+            liens=[
+                LienComponentInput(
+                    percent_of_value=80,
+                    term_years=15,
+                    annual_interest_rate=5.5,
+                )
+            ],
         ),
         ScenarioInput(
             label="30yr single note",
-            first_term_years=30,
-            first_annual_interest_rate=6.5,
-            first_lien_percent=80,
+            liens=[
+                LienComponentInput(
+                    percent_of_value=80,
+                    term_years=30,
+                    annual_interest_rate=6.5,
+                )
+            ],
         ),
-         ScenarioInput(
+        ScenarioInput(
             label="5% down primary house hack",
-            first_term_years=30,
-            first_annual_interest_rate=6.5,
-            first_lien_percent=95,
+            liens=[
+                LienComponentInput(
+                    percent_of_value=95,
+                    term_years=30,
+                    annual_interest_rate=6.5,
+                )
+            ],
         ),
         ScenarioInput(
             label="50yr single note",
-            first_term_years=50,
-            first_annual_interest_rate=7.0,
-            first_lien_percent=80,
+            liens=[
+                LienComponentInput(
+                    percent_of_value=80,
+                    term_years=50,
+                    annual_interest_rate=7.0,
+                )
+            ],
         ),
         ScenarioInput(
             label="50/40/10 stacked",
-            first_term_years=30,
-            first_annual_interest_rate=7.5,
-            first_lien_percent=50,
-            second_term_years=30,
-            second_annual_interest_rate=3.0,
-            second_lien_percent=40,
+            liens=[
+                LienComponentInput(
+                    percent_of_value=50,
+                    term_years=30,
+                    annual_interest_rate=7.5,
+                ),
+                LienComponentInput(
+                    percent_of_value=40,
+                    term_years=30,
+                    annual_interest_rate=3.0,
+                ),
+            ],
         ),
-
     ]
 
     scenario_inputs = request.scenarios or default_structures
@@ -476,59 +495,40 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
     horizon_years = list(request.outlook_years)
 
     for index, scenario in enumerate(scenario_inputs, start=1):
-        first_amount = purchase_price * (scenario.first_lien_percent / 100)
+        if not scenario.liens:
+            raise HTTPException(
+                status_code=400, detail="Each scenario must include at least one lien."
+            )
         component_summaries: list[LoanComponentSummary] = []
         component_schedules: list[Sequence[AmortizationPayment]] = []
         total_financed = 0.0
 
-        if first_amount <= 0:
-            raise HTTPException(
-                status_code=400, detail="First lien percent must result in financed dollars."
+        for lien_index, lien in enumerate(scenario.liens, start=1):
+            amount = purchase_price * (lien.percent_of_value / 100)
+            if amount <= 0:
+                continue
+            lien_note = MortgageScenario(
+                term_years=lien.term_years,
+                annual_interest_rate=lien.annual_interest_rate,
             )
-
-        first_note = MortgageScenario(
-            term_years=scenario.first_term_years,
-            annual_interest_rate=scenario.first_annual_interest_rate,
-        )
-        first_schedule = generate_amortization_schedule(first_amount, first_note)
-        component_schedules.append(first_schedule)
-        total_financed += first_amount
-        component_summaries.append(
-            LoanComponentSummary(
-                label="First lien",
-                amount=first_amount,
-                share_percent=scenario.first_lien_percent,
-                term_years=first_note.term_years,
-                annual_interest_rate=first_note.annual_interest_rate,
-                monthly_payment=first_schedule[0].payment if first_schedule else 0.0,
-                total_interest=total_interest(first_schedule),
-            )
-        )
-
-        if scenario.second_lien_percent > 0:
-            second_amount = purchase_price * (scenario.second_lien_percent / 100)
-            second_rate = (
-                scenario.second_annual_interest_rate
-                if scenario.second_annual_interest_rate is not None
-                else scenario.first_annual_interest_rate
-            )
-            second_note = MortgageScenario(
-                term_years=scenario.second_term_years or scenario.first_term_years,
-                annual_interest_rate=second_rate,
-            )
-            second_schedule = generate_amortization_schedule(second_amount, second_note)
-            component_schedules.append(second_schedule)
-            total_financed += second_amount
+            lien_schedule = generate_amortization_schedule(amount, lien_note)
+            component_schedules.append(lien_schedule)
+            total_financed += amount
             component_summaries.append(
                 LoanComponentSummary(
-                    label="Second lien",
-                    amount=second_amount,
-                    share_percent=scenario.second_lien_percent,
-                    term_years=second_note.term_years,
-                    annual_interest_rate=second_note.annual_interest_rate,
-                    monthly_payment=second_schedule[0].payment if second_schedule else 0.0,
-                    total_interest=total_interest(second_schedule),
+                    label=f"Lien {lien_index}",
+                    amount=amount,
+                    share_percent=lien.percent_of_value,
+                    term_years=lien_note.term_years,
+                    annual_interest_rate=lien_note.annual_interest_rate,
+                    monthly_payment=lien_schedule[0].payment if lien_schedule else 0.0,
+                    total_interest=total_interest(lien_schedule),
                 )
+            )
+
+        if total_financed <= 0:
+            raise HTTPException(
+                status_code=400, detail="At least one lien must finance a positive amount."
             )
 
         blended_schedule = _merge_component_schedules(component_schedules)
@@ -635,9 +635,8 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
         appreciation_equity_five_year = five_year_snapshot["appreciation_equity"]
         appreciation_equity_ten_year = ten_year_snapshot["appreciation_equity"]
         appreciation_equity_fifteen_year = fifteen_year_snapshot["appreciation_equity"]
-        down_payment_percent = max(
-            0.0, 100.0 - scenario.first_lien_percent - scenario.second_lien_percent
-        )
+        total_lien_percent = sum(lien.percent_of_value for lien in scenario.liens)
+        down_payment_percent = max(0.0, 100.0 - total_lien_percent)
         down_payment_amount = purchase_price * (down_payment_percent / 100)
         total_cash_invested = down_payment_amount + closing_costs_amount
         cash_to_close = total_cash_invested
@@ -646,18 +645,15 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
         else:
             annualized_cash = monthly_cashflow * 12
             cash_on_cash_return = annualized_cash / total_cash_invested
-        scenario_label = (scenario.label or "").strip() or " / ".join(
-            filter(
-                None,
-                [
-                    f"{scenario.first_lien_percent:.0f}% first",
-                    f"{scenario.second_lien_percent:.0f}% second"
-                    if scenario.second_lien_percent
-                    else None,
-                    f"{down_payment_percent:.0f}% down" if down_payment_percent else None,
-                ],
-            )
-        ) or f"Scenario {index}"
+        scenario_label = (scenario.label or "").strip()
+        if not scenario_label:
+            parts = [
+                f"{lien.percent_of_value:.0f}% @ {lien.annual_interest_rate:.2f}%"
+                for lien in scenario.liens
+            ]
+            if down_payment_percent:
+                parts.append(f"{down_payment_percent:.0f}% down")
+            scenario_label = " / ".join(parts) or f"Scenario {index}"
         loan_to_value = total_financed / property_value if property_value else None
 
         horizon_outlooks = [
