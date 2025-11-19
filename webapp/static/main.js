@@ -17,7 +17,7 @@ const closingCostPrefix = document.getElementById('closingCostPrefix');
 const saveScenarioButton = document.getElementById('saveScenario');
 const loadScenarioButton = document.getElementById('loadScenario');
 const scenarioFileInput = document.getElementById('scenarioFileInput');
-const closingCostToggleButtons = document.querySelectorAll('.closing-cost-toggle .toggle-option');
+const closingCostToggle = document.getElementById('closingCostToggle');
 const propertyAppreciationInput = document.getElementById('annualAppreciation');
 const rentIncreaseInput = document.getElementById('annualRentIncrease');
 const expenseInflationInput = document.getElementById('annualExpenseInflation');
@@ -169,14 +169,17 @@ function updateClosingCostPrefix() {
 }
 
 function setClosingCostMode(mode) {
-  if (!closingCostMode) return;
+  if (!closingCostMode || !closingCostToggle) return;
   const normalized = mode === 'fixed' ? 'fixed' : 'percent';
   closingCostMode.value = normalized;
-  closingCostToggleButtons.forEach((button) => {
-    const buttonMode = button.dataset.mode;
-    button.classList.toggle('active', buttonMode === normalized);
-  });
+  closingCostToggle.checked = normalized === 'fixed';
   updateClosingCostPrefix();
+}
+
+if (closingCostToggle) {
+  closingCostToggle.addEventListener('change', (e) => {
+    setClosingCostMode(e.target.checked ? 'fixed' : 'percent');
+  });
 }
 
 function escapeHtml(value) {
@@ -319,6 +322,9 @@ function createScenarioRow(config = {}) {
   const createLienEntry = (lienValues = {}) => {
     const entry = document.createElement('div');
     entry.className = 'lien-entry';
+    const isFixed = lienValues.amount !== undefined && lienValues.amount !== null;
+    const mode = isFixed ? 'fixed' : 'percent';
+    
     entry.innerHTML = `
       <div class="lien-entry__header">
         <span class="lien-entry__title">Lien</span>
@@ -332,25 +338,57 @@ function createScenarioRow(config = {}) {
       </div>
       <div class="scenario-row__grid">
         <label class="form-field">
-          <span class="form-label">Lien % of value</span>
-          <input type="number" data-field="percent" min="0.01" max="100" step="0.1" required />
+          <span class="form-label lien-amount-label">${mode === 'fixed' ? 'Lien Amount ($)' : 'Lien % of value'}</span>
+          <div class="form-input lien-amount-input">
+            <input type="number" data-field="amount" min="0" step="${mode === 'fixed' ? '1000' : '0.1'}" required />
+            <input type="hidden" data-field="mode" value="${mode}" />
+            <div class="toggle small">
+              <input type="checkbox" class="lien-mode-toggle" ${mode === 'fixed' ? 'checked' : ''} />
+              <label></label>
+            </div>
+          </div>
         </label>
         <label class="form-field">
           <span class="form-label">Term (years)</span>
-          <input type="number" data-field="term" min="1" step="1" required />
+          <div class="form-input">
+             <input type="number" data-field="term" min="1" step="1" required />
+          </div>
         </label>
         <label class="form-field">
           <span class="form-label">Rate (%)</span>
-          <input type="number" data-field="rate" min="0" step="0.01" required />
+          <div class="form-input">
+            <input type="number" data-field="rate" min="0" step="0.01" required />
+            <span class="suffix">%</span>
+          </div>
         </label>
       </div>
     `;
-    const percentInput = entry.querySelector('[data-field="percent"]');
+    
+    const amountInput = entry.querySelector('[data-field="amount"]');
+    const modeInput = entry.querySelector('[data-field="mode"]');
     const termInput = entry.querySelector('[data-field="term"]');
     const rateInput = entry.querySelector('[data-field="rate"]');
-    percentInput.value = Number.isFinite(lienValues.percent) ? lienValues.percent : 0;
+    const toggle = entry.querySelector('.lien-mode-toggle');
+    const label = entry.querySelector('.lien-amount-label');
+
+    if (mode === 'fixed') {
+        amountInput.value = Number.isFinite(lienValues.amount) ? lienValues.amount : 0;
+    } else {
+        amountInput.value = Number.isFinite(lienValues.percent) ? lienValues.percent : 0;
+    }
+    
     termInput.value = Number.isFinite(lienValues.term) ? lienValues.term : 0;
     rateInput.value = Number.isFinite(lienValues.rate) ? lienValues.rate : 0;
+
+    toggle.addEventListener('change', (e) => {
+        const newMode = e.target.checked ? 'fixed' : 'percent';
+        modeInput.value = newMode;
+        label.textContent = newMode === 'fixed' ? 'Lien Amount ($)' : 'Lien % of value';
+        amountInput.step = newMode === 'fixed' ? '1000' : '0.1';
+        // Clear value when switching modes to avoid confusion, or could try to convert if we had access to property value
+        amountInput.value = ''; 
+    });
+
     return entry;
   };
 
@@ -382,11 +420,17 @@ function createScenarioRow(config = {}) {
 }
 
 function readScenarioConfig(row) {
-  const liens = Array.from(row.querySelectorAll('.lien-entry')).map((entry) => ({
-    percent: parseFloat(entry.querySelector('[data-field="percent"]').value) || 0,
-    term: parseInt(entry.querySelector('[data-field="term"]').value, 10),
-    rate: parseFloat(entry.querySelector('[data-field="rate"]').value),
-  }));
+  const liens = Array.from(row.querySelectorAll('.lien-entry')).map((entry) => {
+    const mode = entry.querySelector('[data-field="mode"]').value;
+    const rawValue = parseFloat(entry.querySelector('[data-field="amount"]').value) || 0;
+    
+    return {
+        mode,
+        value: rawValue,
+        term: parseInt(entry.querySelector('[data-field="term"]').value, 10),
+        rate: parseFloat(entry.querySelector('[data-field="rate"]').value),
+    };
+  });
   const address = row.dataset.address || '';
   const originationMonth = row.dataset.originationMonth
     ? parseInt(row.dataset.originationMonth, 10)
@@ -412,11 +456,18 @@ function readScenarios() {
       ? config.originationMonth
       : null;
     const originationYear = Number.isFinite(config.originationYear) ? config.originationYear : null;
-    const liens = (config.liens.length ? config.liens : scenarioDefaults.liens).map((lien) => ({
-      percent_of_value: lien.percent,
-      term_years: lien.term,
-      annual_interest_rate: lien.rate,
-    }));
+    const liens = (config.liens.length ? config.liens : scenarioDefaults.liens).map((lien) => {
+        const result = {
+            term_years: lien.term,
+            annual_interest_rate: lien.rate,
+        };
+        if (lien.mode === 'fixed') {
+            result.amount = lien.value;
+        } else {
+            result.percent_of_value = lien.value || lien.percent; // Fallback for old data
+        }
+        return result;
+    });
     return {
       label,
       address: address || null,
@@ -446,6 +497,7 @@ function normalizeScenarioDefinition(scenario) {
     scenario.liens.forEach((lien) => {
       normalized.push({
         percent: Number(lien.percent_of_value ?? lien.percent ?? lien.share_percent ?? 0),
+        amount: lien.amount !== undefined ? Number(lien.amount) : undefined,
         term: Number(lien.term_years ?? lien.term ?? 0),
         rate: Number(lien.annual_interest_rate ?? lien.rate ?? 0),
       });
@@ -470,6 +522,7 @@ function normalizeScenarioDefinition(scenario) {
   }
   const liens = (normalized.length ? normalized : scenarioDefaults.liens).map((lien) => ({
     percent: Number.isFinite(lien.percent) ? lien.percent : scenarioDefaults.liens[0].percent,
+    amount: lien.amount,
     term: Number.isFinite(lien.term) ? lien.term : scenarioDefaults.liens[0].term,
     rate: Number.isFinite(lien.rate) ? lien.rate : scenarioDefaults.liens[0].rate,
   }));
@@ -1096,13 +1149,7 @@ if (propertyValueInput) {
 if (closingCostInput) {
   closingCostInput.value = 3;
 }
-closingCostToggleButtons.forEach((button) => {
-  button.addEventListener('click', () => {
-    const mode = button.dataset.mode;
-    if (!mode) return;
-    setClosingCostMode(mode);
-  });
-});
+
 
 if (closingCostMode) {
   setClosingCostMode('percent');

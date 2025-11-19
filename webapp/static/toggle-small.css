@@ -1,0 +1,10 @@
+.toggle.small {
+    transform: scale(0.75);
+    transform-origin: right center;
+}
+
+.lien-entry__controls {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}

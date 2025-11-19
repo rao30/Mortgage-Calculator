@@ -1,3 +1,6 @@
+@import 'toggle.css';
+@import 'toggle-small.css';
+
 :root {
   color-scheme: dark;
   font-family: 'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -163,8 +166,7 @@ body.drawer-open .drawer {
 
 .card.accent {
   border-color: rgba(56, 189, 248, 0.2);
-  background: radial-gradient(circle at top, rgba(15, 118, 232, 0.2), transparent 60%)
-      rgba(15, 23, 42, 0.85);
+  background: radial-gradient(circle at top, rgba(15, 118, 232, 0.2), transparent 60%) rgba(15, 23, 42, 0.85);
 }
 
 .tile {
@@ -254,12 +256,15 @@ body.drawer-open .drawer {
   width: 100%;
   font-size: 1rem;
   color: white;
+  line-height: 1.5;
 }
 
 .closing-cost-input {
   gap: 0.5rem;
   flex-wrap: nowrap;
   align-items: center;
+  padding-right: 0.5rem;
+  /* Reduce padding to fit toggle */
 }
 
 @media (max-width: 768px) {
@@ -268,10 +273,21 @@ body.drawer-open .drawer {
   }
 }
 
-.closing-cost-input input {
-  flex: 1 1 120px;
+.closing-cost-input input,
+.lien-amount-input input {
+  flex: 1 1 auto;
   width: auto;
   min-width: 0;
+}
+
+.closing-cost-input .toggle,
+.lien-amount-input .toggle {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.lien-amount-input {
+  padding-right: 0.5rem;
 }
 
 .closing-cost-toggle {
@@ -410,8 +426,19 @@ body.drawer-open .drawer {
   border-radius: 0.75rem;
   border: 1px solid rgba(148, 163, 184, 0.2);
   background: rgba(15, 23, 42, 0.9);
-  padding: 0.65rem 0.9rem;
+  padding: 0.75rem 1rem;
+  /* Match .form-input padding */
   color: white;
+  line-height: 1.5;
+  /* Match toggle height (approx 24px) */
+}
+
+.scenario-row .form-input input {
+  border: none;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  line-height: 1.5;
 }
 
 .scenario-row__top {
@@ -456,10 +483,9 @@ body.drawer-open .drawer {
 }
 
 .lien-entry {
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 1rem;
-  padding: 1rem;
-  background: rgba(15, 23, 42, 0.55);
+  /* Removed border and background to avoid double-boxing */
+  padding: 0;
+  margin-bottom: 1rem;
 }
 
 .lien-entry__header {
@@ -1073,6 +1099,7 @@ body.drawer-open .drawer {
   position: relative;
   height: 320px;
 }
+
 .app-bar {
   position: fixed;
   top: 0;

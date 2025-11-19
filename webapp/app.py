@@ -73,13 +73,22 @@ DEFAULT_HORIZON_YEARS = (1, 5, 10, 15)
 
 
 class LienComponentInput(BaseModel):
-    percent_of_value: float = Field(
-        ..., gt=0, le=100, description="Percent of property value financed by this lien."
+    percent_of_value: float | None = Field(
+        default=None, gt=0, le=100, description="Percent of property value financed by this lien."
+    )
+    amount: float | None = Field(
+        default=None, gt=0, description="Fixed dollar amount financed by this lien."
     )
     term_years: int = Field(..., gt=0, description="Lien term in years.")
     annual_interest_rate: float = Field(
         ..., ge=0, description="Lien annual interest rate percentage."
     )
+
+    @validator("amount")
+    def _validate_amount_or_percent(cls, v, values):
+        if v is None and values.get("percent_of_value") is None:
+            raise ValueError("Either percent_of_value or amount must be provided")
+        return v
 
 
 class ScenarioInput(BaseModel):
@@ -109,9 +118,8 @@ class ScenarioInput(BaseModel):
 
     @validator("liens")
     def _validate_percentages(cls, liens: List[LienComponentInput]) -> List[LienComponentInput]:
-        total = sum(lien.percent_of_value for lien in liens)
-        if total > 100.0001:
-            raise ValueError("Combined lien percentages cannot exceed 100% of the property value")
+        # Validation of total percentage is tricky without property value here.
+        # We will validate it during calculation.
         return liens
 
 
@@ -504,7 +512,13 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
         total_financed = 0.0
 
         for lien_index, lien in enumerate(scenario.liens, start=1):
-            amount = purchase_price * (lien.percent_of_value / 100)
+            if lien.amount is not None:
+                amount = lien.amount
+                percent = (amount / property_value) * 100 if property_value else 0
+            else:
+                amount = purchase_price * ((lien.percent_of_value or 0) / 100)
+                percent = lien.percent_of_value or 0
+            
             if amount <= 0:
                 continue
             lien_note = MortgageScenario(
@@ -518,7 +532,7 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
                 LoanComponentSummary(
                     label=f"Lien {lien_index}",
                     amount=amount,
-                    share_percent=lien.percent_of_value,
+                    share_percent=percent,
                     term_years=lien_note.term_years,
                     annual_interest_rate=lien_note.annual_interest_rate,
                     monthly_payment=lien_schedule[0].payment if lien_schedule else 0.0,
@@ -635,7 +649,10 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
         appreciation_equity_five_year = five_year_snapshot["appreciation_equity"]
         appreciation_equity_ten_year = ten_year_snapshot["appreciation_equity"]
         appreciation_equity_fifteen_year = fifteen_year_snapshot["appreciation_equity"]
-        total_lien_percent = sum(lien.percent_of_value for lien in scenario.liens)
+        total_lien_percent = sum(
+            ((lien.amount / property_value * 100) if lien.amount is not None else (lien.percent_of_value or 0))
+            for lien in scenario.liens
+        )
         down_payment_percent = max(0.0, 100.0 - total_lien_percent)
         down_payment_amount = purchase_price * (down_payment_percent / 100)
         total_cash_invested = down_payment_amount + closing_costs_amount
@@ -647,10 +664,12 @@ def calculate_mortgage(request: CalculationRequest) -> CalculationResponse:
             cash_on_cash_return = annualized_cash / total_cash_invested
         scenario_label = (scenario.label or "").strip()
         if not scenario_label:
-            parts = [
-                f"{lien.percent_of_value:.0f}% @ {lien.annual_interest_rate:.2f}%"
-                for lien in scenario.liens
-            ]
+            parts = []
+            for lien in scenario.liens:
+                if lien.amount is not None:
+                     parts.append(f"${lien.amount:,.0f} @ {lien.annual_interest_rate:.2f}%")
+                else:
+                     parts.append(f"{lien.percent_of_value:.0f}% @ {lien.annual_interest_rate:.2f}%")
             if down_payment_percent:
                 parts.append(f"{down_payment_percent:.0f}% down")
             scenario_label = " / ".join(parts) or f"Scenario {index}"

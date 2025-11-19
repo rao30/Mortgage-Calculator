@@ -19,7 +19,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/styles.css?v=2" />
   </head>
   <body class="min-h-screen bg-slate-950 text-slate-100">
     <header class="app-bar">
@@ -90,13 +90,9 @@
                     placeholder="3"
                   />
                   <input type="hidden" id="closingCostMode" value="percent" />
-                  <div class="closing-cost-toggle">
-                    <button type="button" class="toggle-option active" data-mode="percent">
-                      %
-                    </button>
-                    <button type="button" class="toggle-option" data-mode="fixed">
-                      $
-                    </button>
+                  <div class="toggle">
+                    <input type="checkbox" id="closingCostToggle" />
+                    <label for="closingCostToggle"></label>
                   </div>
                 </div>
               </label>
